@@ -1,0 +1,6 @@
+@FinLightSA.API_HostAddress = http://localhost:5166
+
+GET {{FinLightSA.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
