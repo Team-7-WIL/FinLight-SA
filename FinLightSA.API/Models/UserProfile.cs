@@ -1,4 +1,6 @@
 using System;
+using Supabase;
+using Supabase.Postgrest;
 
 namespace FinLightSA.API.Models
 {

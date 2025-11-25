@@ -1,3 +1,6 @@
+using Supabase;
+using Supabase.Postgrest;
+
 namespace FinLightSA.API.Models
 {
     public class AuthResponse

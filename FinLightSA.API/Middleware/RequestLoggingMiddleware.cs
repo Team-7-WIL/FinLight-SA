@@ -1,4 +1,6 @@
 ﻿using System.Diagnostics;
+using Supabase;
+using Supabase.Postgrest;
 
 namespace FinLightSA.API.Middleware
 {

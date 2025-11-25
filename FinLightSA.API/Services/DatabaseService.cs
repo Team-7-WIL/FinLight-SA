@@ -1,40 +1,30 @@
-using FinLightSA.API.Models;
-using Postgrest;
 using Supabase;
+using Supabase.Postgrest;
+using FinLightSA.API.Configuration;
 
 namespace FinLightSA.API.Services
 {
     public class DatabaseService
     {
-        private readonly Supabase.Client _client;
+        private readonly Client _client;
 
-        public DatabaseService(Configuration.SupabaseClientFactory factory)
+        public DatabaseService(SupabaseClientFactory factory)
         {
-            _client = factory.CreateClient();
+            _client = factory.GetClient();
         }
 
-        // Insert user profile into 'users' table (if you have a separate profile table)
-        public async Task<PostgrestResponse<UserProfile>> InsertUserProfileAsync(UserProfile profile)
+        // Example SELECT
+        public async Task<List<T>> GetAll<T>() where T : BaseModel, new()
         {
-            return await _client.From<UserProfile>().Insert(profile);
+            var result = await _client.From<T>().Get();
+            return result.Models;
         }
 
-        // Create business
-        public async Task<PostgrestResponse<object>> CreateBusinessAsync(object business)
+        // Example INSERT
+        public async Task<T> Insert<T>(T model) where T : BaseModel, new()
         {
-            return await _client.From<object>("businesses").Insert(business);
-        }
-
-        // Create user_business_roles
-        public async Task<PostgrestResponse<object>> CreateUserBusinessRoleAsync(object roleRow)
-        {
-            return await _client.From<object>("user_business_roles").Insert(roleRow);
-        }
-
-        // Query role for user (example)
-        public async Task<PostgrestResponse<object>> GetUserRolesAsync(string userId)
-        {
-            return await _client.From<object>("user_business_roles").Select("*").Eq("user_id", userId);
+            var result = await _client.From<T>().Insert(model);
+            return result.Models.First();
         }
     }
 }

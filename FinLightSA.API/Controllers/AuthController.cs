@@ -1,6 +1,8 @@
 using FinLightSA.API.Models;
 using FinLightSA.API.Services;
 using Microsoft.AspNetCore.Mvc;
+using Supabase;
+using Supabase.Postgrest;
 
 namespace FinLightSA.API.Controllers
 {

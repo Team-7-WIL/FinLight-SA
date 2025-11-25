@@ -1,5 +1,7 @@
 ﻿using System.Net;
 using System.Text.Json;
+using Supabase;
+using Supabase.Postgrest;
 
 namespace FinLightSA.API.Middleware
 {

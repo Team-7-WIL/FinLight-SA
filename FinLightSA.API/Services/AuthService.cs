@@ -2,6 +2,8 @@ using FinLightSA.API.Configuration;
 using FinLightSA.API.Models;
 using Supabase;
 using System;
+using Supabase.Gotrue;
+using Supabase.Postgrest;
 
 namespace FinLightSA.API.Services
 {

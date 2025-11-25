@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using System.Threading.Tasks;
+using Supabase;
+using Supabase.Postgrest;
 
 namespace FinLightSA.API.Middleware
 {
