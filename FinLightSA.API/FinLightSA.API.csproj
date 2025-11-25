@@ -1,10 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-	  <UserSecretsId>FinLightSA-API-12@3Four5^7</UserSecretsId>
+    <UserSecretsId>8218ee0c-cf09-47f4-9c21-9264295d2f33</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
