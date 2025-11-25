@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\hanna\\Source\\Repos\\FinLight-SA\\FinLightSA.API\\FinLightSA.API.csproj": {}
+    "C:\\Users\\hanna\\source\\repos\\FinLight-SA\\FinLightSA.API\\FinLightSA.API.csproj": {}
   },
   "projects": {
-    "C:\\Users\\hanna\\Source\\Repos\\FinLight-SA\\FinLightSA.API\\FinLightSA.API.csproj": {
+    "C:\\Users\\hanna\\source\\repos\\FinLight-SA\\FinLightSA.API\\FinLightSA.API.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\hanna\\Source\\Repos\\FinLight-SA\\FinLightSA.API\\FinLightSA.API.csproj",
+        "projectUniqueName": "C:\\Users\\hanna\\source\\repos\\FinLight-SA\\FinLightSA.API\\FinLightSA.API.csproj",
         "projectName": "FinLightSA.API",
-        "projectPath": "C:\\Users\\hanna\\Source\\Repos\\FinLight-SA\\FinLightSA.API\\FinLightSA.API.csproj",
+        "projectPath": "C:\\Users\\hanna\\source\\repos\\FinLight-SA\\FinLightSA.API\\FinLightSA.API.csproj",
         "packagesPath": "C:\\Users\\hanna\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\hanna\\Source\\Repos\\FinLight-SA\\FinLightSA.API\\obj\\",
+        "outputPath": "C:\\Users\\hanna\\source\\repos\\FinLight-SA\\FinLightSA.API\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\hanna\\AppData\\Roaming\\NuGet\\NuGet.Config",
@@ -45,9 +45,17 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "dependencies": {
+            "BCrypt.Net-Next": {
+              "target": "Package",
+              "version": "[4.0.3, )"
+            },
             "Microsoft.AspNetCore.OpenApi": {
               "target": "Package",
               "version": "[8.0.6, )"
+            },
+            "Supabase": {
+              "target": "Package",
+              "version": "[1.1.1, )"
             },
             "Swashbuckle.AspNetCore": {
               "target": "Package",
