@@ -1,4 +1,9 @@
-# FinLight SA Backend API
+
+# FinLight SA Frontend:
+
+# FinLight SA Backend:
+
+# FinLight SA Backend API:
 
 ## Overview
 Mobile-first accounting solution backend built with .NET 8, Supabase, and AI integration.
