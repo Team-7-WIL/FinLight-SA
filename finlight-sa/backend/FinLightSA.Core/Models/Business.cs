@@ -1,4 +1,4 @@
-﻿namespace FinLightSA.Core.Models;
+namespace FinLightSA.Core.Models;
 
 public class Business
 {
@@ -13,6 +13,7 @@ public class Business
 
     public ICollection<UserBusinessRole> UserRoles { get; set; } = new List<UserBusinessRole>();
     public ICollection<Customer> Customers { get; set; } = new List<Customer>();
+    public ICollection<ProductCategory> ProductCategories { get; set; } = new List<ProductCategory>();
     public ICollection<Product> Products { get; set; } = new List<Product>();
     public ICollection<Invoice> Invoices { get; set; } = new List<Invoice>();
     public ICollection<Expense> Expenses { get; set; } = new List<Expense>();

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using FinLightSA.Core.DTOs.Common;
@@ -6,6 +6,7 @@ using FinLightSA.Core.DTOs.Expense;
 using FinLightSA.Core.Models;
 using FinLightSA.Infrastructure.Services;
 using FinLightSA.Infrastructure.Data;
+using FinLightSA.API.Services;
 
 namespace FinLightSA.API.Controllers;
 
@@ -17,15 +18,18 @@ public class ExpensesController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly AIService _aiService;
     private readonly ILogger<ExpensesController> _logger;
+    private readonly AuditService _auditService;
 
     public ExpensesController(
         ApplicationDbContext context,
         AIService aiService,
-        ILogger<ExpensesController> logger)
+        ILogger<ExpensesController> logger,
+        AuditService auditService)
     {
         _context = context;
         _aiService = aiService;
         _logger = logger;
+        _auditService = auditService;
     }
 
     private Guid GetBusinessId()
@@ -114,7 +118,26 @@ public class ExpensesController : ControllerBase
 
             if (!string.IsNullOrEmpty(request.ReceiptData))
             {
-                receiptData = Convert.FromBase64String(request.ReceiptData);
+                // Handle data URI prefix if present
+                string base64Data = request.ReceiptData;
+                if (base64Data.Contains(","))
+                {
+                    base64Data = base64Data.Substring(base64Data.IndexOf(",") + 1);
+                }
+                
+                try
+                {
+                    receiptData = Convert.FromBase64String(base64Data);
+                }
+                catch (FormatException)
+                {
+                    return BadRequest(new ApiResponse<ExpenseDto>
+                    {
+                        Success = false,
+                        Message = "Invalid base64 receipt data format"
+                    });
+                }
+                
                 // Determine content type from filename extension
                 if (!string.IsNullOrEmpty(request.ReceiptFileName))
                 {
@@ -152,6 +175,9 @@ public class ExpensesController : ControllerBase
             }
 
             await _context.SaveChangesAsync();
+
+            // Log audit action
+            await _auditService.LogExpenseCreatedAsync(expense.Id, expense.Amount, expense.Category);
 
             var expenseDto = new ExpenseDto
             {
@@ -214,8 +240,27 @@ public class ExpensesController : ControllerBase
             var businessId = GetBusinessId();
             var userId = GetUserId();
 
-            // Decode base64 image
-            var fileBytes = Convert.FromBase64String(request.File);
+            // Decode base64 image (handle data URI prefix if present)
+            string base64Data = request.File;
+            if (base64Data.Contains(","))
+            {
+                // Remove data URI prefix (e.g., "data:image/jpeg;base64,")
+                base64Data = base64Data.Substring(base64Data.IndexOf(",") + 1);
+            }
+            
+            byte[] fileBytes;
+            try
+            {
+                fileBytes = Convert.FromBase64String(base64Data);
+            }
+            catch (FormatException)
+            {
+                return BadRequest(new ApiResponse<ReceiptUploadResponse>
+                {
+                    Success = false,
+                    Message = "Invalid base64 data format"
+                });
+            }
             var contentType = extension switch
             {
                 ".png" => "image/png",
@@ -310,7 +355,26 @@ public class ExpensesController : ControllerBase
             // Handle receipt data if provided
             if (!string.IsNullOrEmpty(request.ReceiptData))
             {
-                expense.ReceiptData = Convert.FromBase64String(request.ReceiptData);
+                // Handle data URI prefix if present
+                string base64Data = request.ReceiptData;
+                if (base64Data.Contains(","))
+                {
+                    base64Data = base64Data.Substring(base64Data.IndexOf(",") + 1);
+                }
+                
+                try
+                {
+                    expense.ReceiptData = Convert.FromBase64String(base64Data);
+                }
+                catch (FormatException)
+                {
+                    return BadRequest(new ApiResponse<ExpenseDto>
+                    {
+                        Success = false,
+                        Message = "Invalid base64 receipt data format"
+                    });
+                }
+                
                 // Determine content type from filename extension
                 if (!string.IsNullOrEmpty(request.ReceiptFileName))
                 {
@@ -329,6 +393,9 @@ public class ExpensesController : ControllerBase
 
             _context.Expenses.Update(expense);
             await _context.SaveChangesAsync();
+
+            // Log audit action
+            await _auditService.LogExpenseUpdatedAsync(expense.Id, expense.Amount, expense.Category);
 
             var expenseDto = new ExpenseDto
             {
@@ -383,6 +450,9 @@ public class ExpensesController : ControllerBase
 
             _context.Expenses.Remove(expense);
             await _context.SaveChangesAsync();
+
+            // Log audit action
+            await _auditService.LogExpenseDeletedAsync(expense.Id);
 
             return Ok(new ApiResponse<bool>
             {

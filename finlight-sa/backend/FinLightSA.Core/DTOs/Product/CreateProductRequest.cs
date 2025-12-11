@@ -4,6 +4,8 @@ namespace FinLightSA.Core.DTOs.Product;
 
 public class CreateProductRequest
 {
+    public Guid? ProductCategoryId { get; set; }
+
     [Required]
     [StringLength(100, MinimumLength = 1)]
     public string Name { get; set; } = string.Empty;

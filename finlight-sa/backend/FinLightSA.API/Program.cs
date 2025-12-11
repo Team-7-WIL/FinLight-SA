@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -63,7 +63,7 @@ builder.Services.AddSwaggerGen(c =>
 // Database context
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlite(connectionString));
+    options.UseSqlite(connectionString, b => b.MigrationsAssembly("FinLightSA.API")));
 
 // JWT Authentication
 var jwtSecret = builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT Secret not configured");
@@ -107,7 +107,10 @@ builder.Services.AddCors(options =>
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddSingleton<SupabaseService>();
 builder.Services.AddHttpClient<AIService>();
+builder.Services.AddScoped<OcrProcessingService>();
 builder.Services.AddScoped<PdfService>();
+builder.Services.AddScoped<AuditService>();
+builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
 

@@ -60,6 +60,10 @@ class FeedbackRequest(BaseModel):
     correct_category: str
     amount: float
 
+class ProcessDocumentRequest(BaseModel):
+    image: str  # base64 encoded image
+    document_type: str  # "receipt" or "invoice"
+
 @app.get("/")
 async def root():
     return {
@@ -115,6 +119,49 @@ async def categorize_transactions_batch(transactions: List[Transaction]):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Batch categorization error: {str(e)}")
 
+@app.post("/process-document")
+async def process_document(request: ProcessDocumentRequest):
+    """
+    Process a document (receipt or invoice) from base64 image data
+    """
+    try:
+        import base64
+        image_bytes = base64.b64decode(request.image)
+
+        if request.document_type.lower() == "receipt":
+            result = ocr_service.extract_receipt_data(image_bytes)
+            raw_text = ocr_service.extract_text_from_image(image_bytes) if ocr_service.is_available() else ""
+            return {
+                "vendor": result.get("vendor", "Unknown"),
+                "amount": result.get("amount", 0.0),
+                "date": result.get("date", ""),
+                "vat_amount": result.get("vat_amount", 0.0),
+                "items": result.get("items", []),
+                "raw_text": raw_text,
+                "confidence": 0.8 if ocr_service.is_available() else 0.3  # Lower confidence if OCR not available
+            }
+        elif request.document_type.lower() == "invoice":
+            # For invoices, we can use the same receipt processing for now
+            # In a more advanced implementation, we'd have separate invoice parsing
+            result = ocr_service.extract_receipt_data(image_bytes)
+            return {
+                "invoice_number": "",  # Would need separate parsing
+                "vendor": result.get("vendor", "Unknown"),
+                "customer": "",  # Invoices might have customer info
+                "amount": result.get("amount", 0.0),
+                "date": result.get("date", ""),
+                "due_date": "",  # Would calculate based on terms
+                "vat_amount": result.get("vat_amount", 0.0),
+                "items": result.get("items", []),
+                "raw_text": "",
+                "confidence": 0.8
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Invalid document type. Use 'receipt' or 'invoice'")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Document processing error: {str(e)}")
+
 @app.post("/ocr/receipt", response_model=ReceiptData)
 async def extract_receipt_data(file: UploadFile = File(...)):
     """
@@ -123,7 +170,7 @@ async def extract_receipt_data(file: UploadFile = File(...)):
     try:
         if not file.content_type or not file.content_type.startswith("image/"):
             raise HTTPException(status_code=400, detail="File must be an image")
-        
+
         contents = await file.read()
         result = ocr_service.extract_receipt_data(contents)
         return result
@@ -166,272 +213,3 @@ async def train_model():
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-# ai-service/app/categorizer.py
-import numpy as np
-import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.pipeline import Pipeline
-from sklearn.model_selection import train_test_split
-import joblib
-import os
-from typing import Dict, List
-from datetime import datetime
-
-class TransactionCategorizer:
-    def __init__(self, model_path="./models"):
-        self.model_path = model_path
-        self.model = None
-        self.vectorizer = None
-        self.categories = [
-            "Rent", "Utilities", "Fuel", "Transport", "Office Supplies",
-            "Marketing", "Salaries", "Inventory", "Meals & Entertainment",
-            "Professional Fees", "Insurance", "Maintenance", "Technology",
-            "Bank Charges", "Taxes", "Other"
-        ]
-        
-        # Create models directory if it doesn't exist
-        os.makedirs(model_path, exist_ok=True)
-        
-        # Load or create model
-        self.load_or_create_model()
-    
-    def load_or_create_model(self):
-        """Load existing model or create and train a new one"""
-        model_file = os.path.join(self.model_path, "categorizer_model.pkl")
-        
-        if os.path.exists(model_file):
-            try:
-                self.model = joblib.load(model_file)
-                print("Loaded existing model")
-            except Exception as e:
-                print(f"Error loading model: {e}. Creating new model.")
-                self.create_initial_model()
-        else:
-            self.create_initial_model()
-    
-    def create_initial_model(self):
-        """Create and train an initial model with synthetic data"""
-        # Sample training data (in production, this would come from a database)
-        training_data = [
-            ("monthly rent payment", "Rent"),
-            ("office space rental", "Rent"),
-            ("electricity bill", "Utilities"),
-            ("water and sanitation", "Utilities"),
-            ("internet service provider", "Utilities"),
-            ("petrol station", "Fuel"),
-            ("diesel fuel", "Fuel"),
-            ("uber trip", "Transport"),
-            ("taxi fare", "Transport"),
-            ("bus ticket", "Transport"),
-            ("printer paper", "Office Supplies"),
-            ("stationery store", "Office Supplies"),
-            ("google ads", "Marketing"),
-            ("facebook advertising", "Marketing"),
-            ("salary payment", "Salaries"),
-            ("staff wages", "Salaries"),
-            ("stock purchase", "Inventory"),
-            ("supplier payment", "Inventory"),
-            ("restaurant", "Meals & Entertainment"),
-            ("coffee shop", "Meals & Entertainment"),
-            ("accountant fees", "Professional Fees"),
-            ("legal services", "Professional Fees"),
-            ("business insurance", "Insurance"),
-            ("vehicle insurance", "Insurance"),
-            ("repair services", "Maintenance"),
-            ("building maintenance", "Maintenance"),
-            ("software subscription", "Technology"),
-            ("cloud hosting", "Technology"),
-            ("bank service fee", "Bank Charges"),
-            ("transaction fee", "Bank Charges"),
-            ("vat payment", "Taxes"),
-            ("income tax", "Taxes"),
-        ]
-        
-        # Create DataFrame
-        df = pd.DataFrame(training_data, columns=["description", "category"])
-        
-        # Create pipeline with TF-IDF vectorizer and Naive Bayes classifier
-        self.model = Pipeline([
-            ('tfidf', TfidfVectorizer(max_features=1000, ngram_range=(1, 2))),
-            ('clf', MultinomialNB())
-        ])
-        
-        # Train model
-        self.model.fit(df["description"], df["category"])
-        
-        # Save model
-        model_file = os.path.join(self.model_path, "categorizer_model.pkl")
-        joblib.dump(self.model, model_file)
-        print("Created and trained new model")
-    
-    def predict(self, description: str, amount: float, direction: str) -> Dict:
-        """Predict category for a transaction"""
-        if self.model is None:
-            raise ValueError("Model not loaded")
-        
-        # Get prediction
-        prediction = self.model.predict([description])[0]
-        
-        # Get probability scores
-        probabilities = self.model.predict_proba([description])[0]
-        confidence = float(max(probabilities))
-        
-        # Get top 3 alternative categories
-        top_indices = np.argsort(probabilities)[-3:][::-1]
-        classes = self.model.classes_
-        alternatives = [
-            {"category": classes[i], "confidence": float(probabilities[i])}
-            for i in top_indices[1:]  # Skip the top prediction
-        ]
-        
-        return {
-            "category": prediction,
-            "confidence": confidence,
-            "alternatives": alternatives
-        }
-    
-    def add_feedback(self, description: str, predicted_category: str, 
-                     correct_category: str, amount: float):
-        """Store feedback for future retraining"""
-        feedback_file = os.path.join(self.model_path, "feedback.csv")
-        
-        feedback_data = {
-            "description": description,
-            "predicted_category": predicted_category,
-            "correct_category": correct_category,
-            "amount": amount,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-        
-        df = pd.DataFrame([feedback_data])
-        
-        # Append to existing feedback file
-        if os.path.exists(feedback_file):
-            df.to_csv(feedback_file, mode='a', header=False, index=False)
-        else:
-            df.to_csv(feedback_file, index=False)
-    
-    def retrain(self):
-        """Retrain model with accumulated feedback"""
-        feedback_file = os.path.join(self.model_path, "feedback.csv")
-        
-        if not os.path.exists(feedback_file):
-            return {"message": "No feedback data available for retraining"}
-        
-        # Load feedback data
-        feedback_df = pd.read_csv(feedback_file)
-        
-        if len(feedback_df) < 10:
-            return {"message": "Insufficient feedback data for retraining"}
-        
-        # Retrain model with correct categories
-        X = feedback_df["description"]
-        y = feedback_df["correct_category"]
-        
-        self.model.fit(X, y)
-        
-        # Save updated model
-        model_file = os.path.join(self.model_path, "categorizer_model.pkl")
-        joblib.dump(self.model, model_file)
-        
-        return {
-            "message": "Model retrained successfully",
-            "training_samples": len(feedback_df)
-        }
-
-# ai-service/app/ocr.py
-import re
-from datetime import datetime
-from typing import Dict, List, Optional
-import base64
-
-class OCRService:
-    def __init__(self):
-        # In production, initialize Google Cloud Vision API here
-        self.vision_available = False
-        try:
-            # Attempt to import Google Cloud Vision
-            # from google.cloud import vision
-            # self.client = vision.ImageAnnotatorClient()
-            # self.vision_available = True
-            pass
-        except Exception as e:
-            print(f"Google Cloud Vision not available: {e}")
-    
-    def is_available(self) -> bool:
-        return self.vision_available
-    
-    def extract_receipt_data(self, image_bytes: bytes) -> Dict:
-        """
-        Extract structured data from a receipt image
-        """
-        # Placeholder implementation - In production, use Google Cloud Vision API
-        # For now, return a mock response
-        
-        # In production, you would:
-        # 1. Call Google Cloud Vision API to extract text
-        # 2. Parse the text to identify vendor, amount, date, items
-        # 3. Return structured data
-        
-        return {
-            "vendor": "Sample Vendor",
-            "amount": 0.0,
-            "date": datetime.now().isoformat(),
-            "vat_amount": 0.0,
-            "items": [
-                {
-                    "description": "Sample Item",
-                    "quantity": 1,
-                    "unit_price": 0.0,
-                    "total": 0.0
-                }
-            ]
-        }
-    
-    def extract_text_from_image(self, image_bytes: bytes) -> str:
-        """
-        Extract raw text from an image
-        """
-        # Placeholder - In production, use Google Cloud Vision API
-        return "Sample text from receipt"
-    
-    def parse_amount(self, text: str) -> Optional[float]:
-        """
-        Extract monetary amounts from text
-        """
-        # Look for currency patterns
-        patterns = [
-            r'R\s*(\d+[\.,]\d{2})',  # R 100.00
-            r'(\d+[\.,]\d{2})\s*ZAR',  # 100.00 ZAR
-            r'Total[:\s]+R?\s*(\d+[\.,]\d{2})',  # Total: R 100.00
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                amount_str = match.group(1).replace(',', '.')
-                try:
-                    return float(amount_str)
-                except ValueError:
-                    continue
-        
-        return None
-    
-    def parse_date(self, text: str) -> Optional[str]:
-        """
-        Extract date from text
-        """
-        # Look for date patterns
-        patterns = [
-            r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',  # DD/MM/YYYY or MM/DD/YYYY
-            r'(\d{4}[/-]\d{1,2}[/-]\d{1,2})',  # YYYY/MM/DD
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, text)
-            if match:
-                return match.group(1)
-        
-        return None

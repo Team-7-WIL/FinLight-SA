@@ -40,12 +40,23 @@ public class ProductsController : ControllerBase
 
             var totalCount = await query.CountAsync();
             var products = await query
+                .Include(p => p.ProductCategory)
                 .OrderBy(p => p.Name)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(p => new ProductDto
                 {
                     Id = p.Id,
+                    ProductCategoryId = p.ProductCategoryId,
+                    ProductCategory = p.ProductCategory != null ? new ProductCategoryDto
+                    {
+                        Id = p.ProductCategory.Id,
+                        Name = p.ProductCategory.Name,
+                        Description = p.ProductCategory.Description,
+                        Color = p.ProductCategory.Color,
+                        CreatedAt = p.ProductCategory.CreatedAt,
+                        UpdatedAt = p.ProductCategory.UpdatedAt
+                    } : null,
                     Name = p.Name,
                     Description = p.Description,
                     UnitPrice = p.UnitPrice,
@@ -89,6 +100,7 @@ public class ProductsController : ControllerBase
         {
             var businessId = GetBusinessId();
             var product = await _context.Products
+                .Include(p => p.ProductCategory)
                 .FirstOrDefaultAsync(p => p.Id == id && p.BusinessId == businessId);
 
             if (product == null)
@@ -103,6 +115,16 @@ public class ProductsController : ControllerBase
             var productDto = new ProductDto
             {
                 Id = product.Id,
+                ProductCategoryId = product.ProductCategoryId,
+                ProductCategory = product.ProductCategory != null ? new ProductCategoryDto
+                {
+                    Id = product.ProductCategory.Id,
+                    Name = product.ProductCategory.Name,
+                    Description = product.ProductCategory.Description,
+                    Color = product.ProductCategory.Color,
+                    CreatedAt = product.ProductCategory.CreatedAt,
+                    UpdatedAt = product.ProductCategory.UpdatedAt
+                } : null,
                 Name = product.Name,
                 Description = product.Description,
                 UnitPrice = product.UnitPrice,
@@ -140,6 +162,7 @@ public class ProductsController : ControllerBase
             {
                 Id = Guid.NewGuid(),
                 BusinessId = businessId,
+                ProductCategoryId = request.ProductCategoryId,
                 Name = request.Name,
                 Description = request.Description,
                 UnitPrice = request.UnitPrice,
@@ -151,16 +174,31 @@ public class ProductsController : ControllerBase
             _context.Products.Add(product);
             await _context.SaveChangesAsync();
 
+            // Load the product with category for the response
+            var savedProduct = await _context.Products
+                .Include(p => p.ProductCategory)
+                .FirstAsync(p => p.Id == product.Id);
+
             var productDto = new ProductDto
             {
-                Id = product.Id,
-                Name = product.Name,
-                Description = product.Description,
-                UnitPrice = product.UnitPrice,
-                IsService = product.IsService,
-                Sku = product.Sku,
-                CreatedAt = product.CreatedAt,
-                UpdatedAt = product.UpdatedAt
+                Id = savedProduct.Id,
+                ProductCategoryId = savedProduct.ProductCategoryId,
+                ProductCategory = savedProduct.ProductCategory != null ? new ProductCategoryDto
+                {
+                    Id = savedProduct.ProductCategory.Id,
+                    Name = savedProduct.ProductCategory.Name,
+                    Description = savedProduct.ProductCategory.Description,
+                    Color = savedProduct.ProductCategory.Color,
+                    CreatedAt = savedProduct.ProductCategory.CreatedAt,
+                    UpdatedAt = savedProduct.ProductCategory.UpdatedAt
+                } : null,
+                Name = savedProduct.Name,
+                Description = savedProduct.Description,
+                UnitPrice = savedProduct.UnitPrice,
+                IsService = savedProduct.IsService,
+                Sku = savedProduct.Sku,
+                CreatedAt = savedProduct.CreatedAt,
+                UpdatedAt = savedProduct.UpdatedAt
             };
 
             return CreatedAtAction(nameof(GetProduct), new { id = product.Id },
@@ -188,6 +226,7 @@ public class ProductsController : ControllerBase
         {
             var businessId = GetBusinessId();
             var product = await _context.Products
+                .Include(p => p.ProductCategory)
                 .FirstOrDefaultAsync(p => p.Id == id && p.BusinessId == businessId);
 
             if (product == null)
@@ -199,6 +238,7 @@ public class ProductsController : ControllerBase
                 });
             }
 
+            product.ProductCategoryId = request.ProductCategoryId;
             product.Name = request.Name;
             product.Description = request.Description;
             product.UnitPrice = request.UnitPrice;
@@ -211,6 +251,16 @@ public class ProductsController : ControllerBase
             var productDto = new ProductDto
             {
                 Id = product.Id,
+                ProductCategoryId = product.ProductCategoryId,
+                ProductCategory = product.ProductCategory != null ? new ProductCategoryDto
+                {
+                    Id = product.ProductCategory.Id,
+                    Name = product.ProductCategory.Name,
+                    Description = product.ProductCategory.Description,
+                    Color = product.ProductCategory.Color,
+                    CreatedAt = product.ProductCategory.CreatedAt,
+                    UpdatedAt = product.ProductCategory.UpdatedAt
+                } : null,
                 Name = product.Name,
                 Description = product.Description,
                 UnitPrice = product.UnitPrice,

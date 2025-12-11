@@ -6,6 +6,7 @@ using FinLightSA.Core.DTOs.Banking;
 using FinLightSA.Core.Models;
 using FinLightSA.Infrastructure.Data;
 using FinLightSA.Infrastructure.Services;
+using FinLightSA.API.Services;
 
 namespace FinLightSA.API.Controllers;
 
@@ -17,15 +18,18 @@ public class BankTransactionsController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly AIService _aiService;
     private readonly ILogger<BankTransactionsController> _logger;
+    private readonly AuditService _auditService;
 
     public BankTransactionsController(
         ApplicationDbContext context,
         AIService aiService,
-        ILogger<BankTransactionsController> logger)
+        ILogger<BankTransactionsController> logger,
+        AuditService auditService)
     {
         _context = context;
         _aiService = aiService;
         _logger = logger;
+        _auditService = auditService;
     }
 
     private Guid GetBusinessId()
@@ -155,6 +159,9 @@ public class BankTransactionsController : ControllerBase
                 transaction.AiCategory = prediction.Category;
                 transaction.ConfidenceScore = (decimal)prediction.Confidence;
                 await _context.SaveChangesAsync();
+
+                // Log audit action
+                await _auditService.LogTransactionCategorizedAsync(transaction.Id, prediction.Category);
             }
 
             var transactionDto = new BankTransactionDto
