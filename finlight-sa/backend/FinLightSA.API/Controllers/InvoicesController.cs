@@ -333,7 +333,7 @@ public class InvoicesController : ControllerBase
             await _context.SaveChangesAsync();
 
             // Audit log for status change
-            LogAuditAction("UPDATE_STATUS", "INVOICE", invoice.Id, $"Status changed to {request.Status} for invoice {invoice.Number}");
+            // LogAuditAction("UPDATE_STATUS", "INVOICE", invoice.Id, $"Status changed to {request.Status} for invoice {invoice.Number}");
 
             return Ok(new ApiResponse<InvoiceDto>
             {
