@@ -2,59 +2,113 @@ import re
 from datetime import datetime
 from typing import Dict, List, Optional
 import base64
+from io import BytesIO
+from PIL import Image
+import pytesseract
+import os
 
 class OCRService:
     def __init__(self):
-        # In production, initialize Google Cloud Vision API here
         self.vision_available = False
         try:
-            # Attempt to import Google Cloud Vision
-            # from google.cloud import vision
-            # self.client = vision.ImageAnnotatorClient()
-            # self.vision_available = True
-
-            # For now, enable basic OCR functionality with mock data
-            self.vision_available = True
-            print("OCR service enabled with mock functionality")
+            # Try to use Tesseract OCR
+            # Check if tesseract is available
+            try:
+                # Test if tesseract is installed
+                pytesseract.get_tesseract_version()
+                self.vision_available = True
+                print("Tesseract OCR service enabled")
+            except Exception as e:
+                print(f"Tesseract not found in PATH: {e}")
+                print("Please install Tesseract OCR: https://github.com/tesseract-ocr/tesseract")
+                # Try to set tesseract path (common Windows location)
+                if os.name == 'nt':  # Windows
+                    possible_paths = [
+                        r'C:\Program Files\Tesseract-OCR\tesseract.exe',
+                        r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe',
+                        r'C:\Users\{}\AppData\Local\Programs\Tesseract-OCR\tesseract.exe'.format(os.environ.get('USERNAME', '')),
+                        r'C:\Users\{}\tesseract-ocr\tesseract.exe'.format(os.environ.get('USERNAME', '')),
+                        r'C:\ProgramData\chocolatey\lib\tesseract\tools\tesseract.exe',
+                    ]
+                    for path in possible_paths:
+                        if os.path.exists(path):
+                            pytesseract.pytesseract.tesseract_cmd = path
+                            self.vision_available = True
+                            print(f"Tesseract found at: {path}")
+                            break
         except Exception as e:
-            print(f"Google Cloud Vision not available: {e}")
+            print(f"OCR initialization error: {e}")
 
     def is_available(self) -> bool:
         return self.vision_available
     
     def extract_receipt_data(self, image_bytes: bytes) -> Dict:
         """
-        Extract structured data from a receipt image
+        Extract structured data from a receipt image using Tesseract OCR
         """
-        # Placeholder implementation - In production, use Google Cloud Vision API
-        # For now, return a mock response
+        if not self.vision_available:
+            # Fallback to mock data if Tesseract is not available
+            return {
+                "vendor": "Sample Vendor",
+                "amount": 0.0,
+                "date": datetime.now().isoformat(),
+                "vat_amount": 0.0,
+                "items": [
+                    {
+                        "description": "Sample Item",
+                        "quantity": 1,
+                        "unit_price": 0.0,
+                        "total": 0.0
+                    }
+                ]
+            }
         
-        # In production, you would:
-        # 1. Call Google Cloud Vision API to extract text
-        # 2. Parse the text to identify vendor, amount, date, items
-        # 3. Return structured data
-        
-        return {
-            "vendor": "Sample Vendor",
-            "amount": 0.0,
-            "date": datetime.now().isoformat(),
-            "vat_amount": 0.0,
-            "items": [
-                {
-                    "description": "Sample Item",
-                    "quantity": 1,
-                    "unit_price": 0.0,
-                    "total": 0.0
-                }
-            ]
-        }
+        try:
+            # Convert bytes to PIL Image
+            image = Image.open(BytesIO(image_bytes))
+            
+            # Perform OCR
+            text = pytesseract.image_to_string(image, lang='eng')
+            
+            # Parse the extracted text
+            vendor = self.parse_vendor(text)
+            amount = self.parse_amount(text)
+            date = self.parse_date(text)
+            vat_amount = self.parse_vat(text)
+            items = self.parse_items(text)
+            
+            return {
+                "vendor": vendor or "Unknown Vendor",
+                "amount": amount or 0.0,
+                "date": date or datetime.now().isoformat(),
+                "vat_amount": vat_amount,
+                "items": items
+            }
+        except Exception as e:
+            print(f"OCR extraction error: {e}")
+            # Return minimal data on error
+            return {
+                "vendor": "Unknown Vendor",
+                "amount": 0.0,
+                "date": datetime.now().isoformat(),
+                "vat_amount": 0.0,
+                "items": []
+            }
     
     def extract_text_from_image(self, image_bytes: bytes) -> str:
         """
-        Extract raw text from an image
+        Extract raw text from an image using Tesseract OCR
         """
-        # Placeholder - In production, use Google Cloud Vision API
-        return "Sample text from receipt"
+        if not self.vision_available:
+            return "OCR not available"
+        
+        try:
+            image = Image.open(BytesIO(image_bytes))
+            text = pytesseract.image_to_string(image, lang='eng')
+            return text
+        except Exception as e:
+            print(f"Text extraction error: {e}")
+            return ""
     
     def parse_amount(self, text: str) -> Optional[float]:
         """
@@ -78,6 +132,77 @@ class OCRService:
         
         return None
     
+    def parse_vendor(self, text: str) -> Optional[str]:
+        """
+        Extract vendor name from text (usually first line or after "FROM", "VENDOR", etc.)
+        """
+        lines = text.split('\n')
+        for i, line in enumerate(lines[:5]):  # Check first 5 lines
+            line = line.strip()
+            if line and len(line) > 3:
+                # Skip common receipt headers
+                if not any(keyword in line.upper() for keyword in ['RECEIPT', 'INVOICE', 'DATE', 'TOTAL', 'AMOUNT']):
+                    return line
+        return None
+    
+    def parse_vat(self, text: str) -> Optional[float]:
+        """
+        Extract VAT amount from text
+        """
+        patterns = [
+            r'VAT[:\s]+R?\s*(\d+[\.,]\d{2})',
+            r'VAT\s+AMOUNT[:\s]+R?\s*(\d+[\.,]\d{2})',
+            r'TAX[:\s]+R?\s*(\d+[\.,]\d{2})',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                amount_str = match.group(1).replace(',', '.')
+                try:
+                    return float(amount_str)
+                except ValueError:
+                    continue
+        
+        return None
+    
+    def parse_items(self, text: str) -> List[dict]:
+        """
+        Extract line items from receipt text
+        """
+        items = []
+        lines = text.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Look for lines that might be items (contain numbers and text)
+            # Pattern: description followed by price
+            item_pattern = r'(.+?)\s+R?\s*(\d+[\.,]\d{2})\s*$'
+            match = re.search(item_pattern, line)
+            if match:
+                description = match.group(1).strip()
+                price_str = match.group(2).replace(',', '.')
+                
+                # Skip if it's a total or subtotal
+                if any(keyword in description.upper() for keyword in ['TOTAL', 'SUBTOTAL', 'VAT', 'TAX', 'BALANCE']):
+                    continue
+                
+                try:
+                    price = float(price_str)
+                    items.append({
+                        "description": description,
+                        "quantity": 1,
+                        "unit_price": price,
+                        "total": price
+                    })
+                except ValueError:
+                    continue
+        
+        return items[:10]  # Limit to 10 items
+    
     def parse_date(self, text: str) -> Optional[str]:
         """
         Extract date from text
@@ -86,10 +211,11 @@ class OCRService:
         patterns = [
             r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',  # DD/MM/YYYY or MM/DD/YYYY
             r'(\d{4}[/-]\d{1,2}[/-]\d{1,2})',  # YYYY/MM/DD
+            r'(\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{2,4})',  # DD Mon YYYY
         ]
         
         for pattern in patterns:
-            match = re.search(pattern, text)
+            match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 return match.group(1)
         

@@ -6,6 +6,7 @@ using FinLightSA.Core.DTOs.Banking;
 using FinLightSA.Core.Models;
 using FinLightSA.Infrastructure.Data;
 using FinLightSA.Infrastructure.Services;
+using FinLightSA.API.Services;
 
 namespace FinLightSA.API.Controllers;
 
@@ -17,15 +18,18 @@ public class BankStatementsController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly AIService _aiService;
     private readonly ILogger<BankStatementsController> _logger;
+    private readonly AuditService _auditService;
 
     public BankStatementsController(
         ApplicationDbContext context,
         AIService aiService,
-        ILogger<BankStatementsController> logger)
+        ILogger<BankStatementsController> logger,
+        AuditService auditService)
     {
         _context = context;
         _aiService = aiService;
         _logger = logger;
+        _auditService = auditService;
     }
 
     private Guid GetBusinessId()
@@ -39,6 +43,7 @@ public class BankStatementsController : ControllerBase
         var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         return Guid.Parse(userIdClaim!);
     }
+
 
     [HttpGet]
     public async Task<ActionResult<ApiResponse<PaginatedResponse<BankStatementDto>>>> GetBankStatements(
@@ -151,6 +156,9 @@ public class BankStatementsController : ControllerBase
             _context.BankStatements.Add(bankStatement);
             await _context.SaveChangesAsync();
 
+            // Log audit action
+            await _auditService.LogBankStatementUploadedAsync(bankStatement.Id, bankStatement.FileName);
+
             var bankStatementDto = new BankStatementDto
             {
                 Id = bankStatement.Id,
@@ -237,6 +245,9 @@ public class BankStatementsController : ControllerBase
 
             bankStatement.Status = "Processed";
             await _context.SaveChangesAsync();
+
+            // Log audit action
+            await _auditService.LogBankStatementProcessedAsync(bankStatement.Id, transactions.Count);
 
             return Ok(new ApiResponse<bool>
             {
@@ -363,6 +374,9 @@ public class BankStatementsController : ControllerBase
             }
 
             // File data is stored in SQLite, no need to delete from external storage
+
+            // Log audit action before deletion
+            await _auditService.LogActionAsync("Deleted", "BankStatement", bankStatement.Id, $"Deleted bank statement: {bankStatement.FileName}");
 
             _context.BankStatements.Remove(bankStatement);
             await _context.SaveChangesAsync();

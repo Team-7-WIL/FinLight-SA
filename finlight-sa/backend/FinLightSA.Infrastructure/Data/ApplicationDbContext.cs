@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using FinLightSA.Core.Models;
 using Google.Api;
 using Microsoft.IdentityModel.Tokens;
@@ -21,6 +21,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Business> Businesses { get; set; }
     public DbSet<UserBusinessRole> UserBusinessRoles { get; set; }
     public DbSet<Customer> Customers { get; set; }
+    public DbSet<ProductCategory> ProductCategories { get; set; }
     public DbSet<Product> Products { get; set; }
     public DbSet<Invoice> Invoices { get; set; }
     public DbSet<InvoiceItem> InvoiceItems { get; set; }
@@ -84,6 +85,19 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        // ProductCategory configuration
+        modelBuilder.Entity<ProductCategory>(entity =>
+        {
+            entity.ToTable("product_categories");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(255);
+
+            entity.HasOne(e => e.Business)
+                .WithMany(b => b.ProductCategories)
+                .HasForeignKey(e => e.BusinessId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         // Product configuration
         modelBuilder.Entity<Product>(entity =>
         {
@@ -96,6 +110,11 @@ public class ApplicationDbContext : DbContext
                 .WithMany(b => b.Products)
                 .HasForeignKey(e => e.BusinessId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.ProductCategory)
+                .WithMany(pc => pc.Products)
+                .HasForeignKey(e => e.ProductCategoryId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // Invoice configuration

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using FinLightSA.Core.DTOs.Common;
@@ -6,6 +6,7 @@ using FinLightSA.Core.DTOs.Invoice;
 using FinLightSA.Core.Models;
 using FinLightSA.Infrastructure.Data;
 using FinLightSA.API.Services;
+using System.Security.Claims;
 using Google;
 
 namespace FinLightSA.API.Controllers;
@@ -18,15 +19,18 @@ public class InvoicesController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly PdfService _pdfService;
     private readonly ILogger<InvoicesController> _logger;
+    private readonly AuditService _auditService;
 
     public InvoicesController(
         ApplicationDbContext context,
         PdfService pdfService,
-        ILogger<InvoicesController> logger)
+        ILogger<InvoicesController> logger,
+        AuditService auditService)
     {
         _context = context;
         _pdfService = pdfService;
         _logger = logger;
+        _auditService = auditService;
     }
 
     private Guid GetBusinessId()
@@ -281,6 +285,9 @@ public class InvoicesController : ControllerBase
                 CreatedAt = invoice.CreatedAt
             };
 
+            // Log invoice creation
+            await _auditService.LogInvoiceCreatedAsync(invoice.Id, invoice.Number, invoice.Total);
+
             return CreatedAtAction(nameof(GetInvoice), new { id = invoice.Id }, new ApiResponse<InvoiceDto>
             {
                 Success = true,
@@ -324,6 +331,9 @@ public class InvoicesController : ControllerBase
             invoice.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+
+            // Audit log for status change
+            // LogAuditAction("UPDATE_STATUS", "INVOICE", invoice.Id, $"Status changed to {request.Status} for invoice {invoice.Number}");
 
             return Ok(new ApiResponse<InvoiceDto>
             {
