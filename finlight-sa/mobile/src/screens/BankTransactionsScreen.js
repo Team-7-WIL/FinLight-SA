@@ -21,6 +21,11 @@ export default function BankTransactionsScreen({ navigation }) {
   const [selectedTransactions, setSelectedTransactions] = useState([]);
   const [feedbackTransaction, setFeedbackTransaction] = useState(null);
   const [feedbackCategory, setFeedbackCategory] = useState('');
+  const [editingTransaction, setEditingTransaction] = useState(null);
+  const [editedDescription, setEditedDescription] = useState('');
+  const [editedAmount, setEditedAmount] = useState('');
+  const [editedDate, setEditedDate] = useState('');
+  const [editedDirection, setEditedDirection] = useState('');
   const { theme } = useThemeStore();
   const { t } = useLanguage();
 
@@ -116,6 +121,78 @@ export default function BankTransactionsScreen({ navigation }) {
     );
   };
 
+  const deleteTransaction = async (transactionId) => {
+    Alert.alert(
+      t('common.delete') + ' ' + t('titles.bankTransactions'),
+      t('messages.deleteTransactionConfirm') || 'Are you sure you want to delete this transaction?',
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const response = await apiClient.delete(`/banktransactions/${transactionId}`);
+              if (response.data.success) {
+                Alert.alert(t('common.success'), t('messages.transactionDeleted') || 'Transaction deleted successfully');
+                loadTransactions(); // Refresh the list
+              } else {
+                Alert.alert(t('common.error'), response.data.message || t('messages.failedToDeleteTransaction') || 'Failed to delete transaction');
+              }
+            } catch (error) {
+              console.error('Error deleting transaction:', error);
+              Alert.alert(t('common.error'), t('messages.failedToDeleteTransaction') || 'Failed to delete transaction');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const startEditingTransaction = (transaction) => {
+    setEditingTransaction(transaction);
+    setEditedDescription(transaction.description);
+    setEditedAmount(transaction.amount.toString());
+    setEditedDate(new Date(transaction.txnDate).toISOString().split('T')[0]);
+    setEditedDirection(transaction.direction);
+  };
+
+  const saveTransactionEdit = async () => {
+    if (!editingTransaction) return;
+
+    // Validation
+    if (!editedDescription.trim()) {
+      Alert.alert(t('common.error'), 'Description is required');
+      return;
+    }
+
+    const amount = parseFloat(editedAmount);
+    if (isNaN(amount) || amount <= 0) {
+      Alert.alert(t('common.error'), 'Amount must be greater than 0');
+      return;
+    }
+
+    try {
+      const response = await apiClient.put(`/banktransactions/${editingTransaction.id}`, {
+        description: editedDescription.trim(),
+        amount: amount,
+        txnDate: new Date(editedDate).toISOString(),
+        direction: editedDirection,
+      });
+
+      if (response.data.success) {
+        Alert.alert(t('common.success'), 'Transaction updated successfully');
+        setEditingTransaction(null);
+        loadTransactions();
+      } else {
+        Alert.alert(t('common.error'), response.data.message || 'Failed to update transaction');
+      }
+    } catch (error) {
+      console.error('Error updating transaction:', error);
+      Alert.alert(t('common.error'), 'Failed to update transaction');
+    }
+  };
+
   const renderTransaction = ({ item }) => (
     <View
       style={[
@@ -159,17 +236,19 @@ export default function BankTransactionsScreen({ navigation }) {
 
       {item.aiCategory && (
         <View style={styles.categoryContainer}>
-          <Text style={[styles.categoryLabel, { color: theme.colors.textSecondary }]}>
-            {t('expenses.category')}:
-          </Text>
-          <Text style={[styles.category, { color: theme.colors.primary }]}>
-            {item.aiCategory}
-          </Text>
-          {item.confidenceScore && (
-            <Text style={[styles.confidence, { color: theme.colors.textSecondary }]}>
-              ({(item.confidenceScore * 100).toFixed(1)}% {t('common.confirm').toLowerCase()})
+          <View style={styles.categoryRow}>
+            <Text style={[styles.categoryLabel, { color: theme.colors.textSecondary }]}>
+              {t('expenses.category')}:
             </Text>
-          )}
+            <Text style={[styles.category, { color: theme.colors.primary }]}>
+              {item.aiCategory}
+            </Text>
+            {item.confidenceScore && (
+              <Text style={[styles.confidence, { color: theme.colors.textSecondary }]}>
+                ({(item.confidenceScore * 100).toFixed(1)}% {t('common.confirm').toLowerCase()})
+              </Text>
+            )}
+          </View>
         </View>
       )}
 
@@ -191,6 +270,20 @@ export default function BankTransactionsScreen({ navigation }) {
             <Text style={styles.actionButtonText}>{t('buttons.correct')}</Text>
           </TouchableOpacity>
         )}
+
+        <TouchableOpacity
+          style={[styles.actionButton, { backgroundColor: theme.colors.warning || '#FF9800' }]}
+          onPress={() => startEditingTransaction(item)}
+        >
+          <Text style={styles.actionButtonText}>{t('buttons.edit') || 'Edit'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, { backgroundColor: theme.colors.error }]}
+          onPress={() => deleteTransaction(item.id)}
+        >
+          <Text style={styles.actionButtonText}>{t('buttons.delete')}</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -240,6 +333,119 @@ export default function BankTransactionsScreen({ navigation }) {
           </View>
         }
       />
+
+      {editingTransaction && (
+        <View style={styles.editOverlay}>
+          <View style={[styles.editContainer, { backgroundColor: theme.colors.card }]}>
+            <Text style={[styles.editTitle, { color: theme.colors.text }]}>
+              {t('common.edit') || 'Edit Transaction'}
+            </Text>
+
+            <Text style={[styles.editLabel, { color: theme.colors.textSecondary }]}>
+              {t('common.description') || 'Description'}
+            </Text>
+            <TextInput
+              style={[styles.editInput, {
+                backgroundColor: theme.colors.background,
+                color: theme.colors.text,
+                borderColor: theme.colors.border
+              }]}
+              placeholder={t('common.description')}
+              placeholderTextColor={theme.colors.textSecondary}
+              value={editedDescription}
+              onChangeText={setEditedDescription}
+              maxLength={200}
+            />
+
+            <Text style={[styles.editLabel, { color: theme.colors.textSecondary }]}>
+              {t('common.amount') || 'Amount'}
+            </Text>
+            <TextInput
+              style={[styles.editInput, {
+                backgroundColor: theme.colors.background,
+                color: theme.colors.text,
+                borderColor: theme.colors.border
+              }]}
+              placeholder="0.00"
+              placeholderTextColor={theme.colors.textSecondary}
+              value={editedAmount}
+              onChangeText={setEditedAmount}
+              keyboardType="decimal-pad"
+            />
+
+            <Text style={[styles.editLabel, { color: theme.colors.textSecondary }]}>
+              {t('common.date') || 'Date'}
+            </Text>
+            <TextInput
+              style={[styles.editInput, {
+                backgroundColor: theme.colors.background,
+                color: theme.colors.text,
+                borderColor: theme.colors.border
+              }]}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={theme.colors.textSecondary}
+              value={editedDate}
+              onChangeText={setEditedDate}
+            />
+
+            <Text style={[styles.editLabel, { color: theme.colors.textSecondary }]}>
+              {t('common.type') || 'Type'} (Debit/Credit)
+            </Text>
+            <View style={styles.directionButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.directionButton,
+                  {
+                    backgroundColor: editedDirection === 'Debit' ? theme.colors.error : theme.colors.background,
+                    borderColor: theme.colors.border
+                  }
+                ]}
+                onPress={() => setEditedDirection('Debit')}
+              >
+                <Text style={[
+                  styles.directionButtonText,
+                  { color: editedDirection === 'Debit' ? '#fff' : theme.colors.text }
+                ]}>
+                  Debit
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.directionButton,
+                  {
+                    backgroundColor: editedDirection === 'Credit' ? theme.colors.success : theme.colors.background,
+                    borderColor: theme.colors.border
+                  }
+                ]}
+                onPress={() => setEditedDirection('Credit')}
+              >
+                <Text style={[
+                  styles.directionButtonText,
+                  { color: editedDirection === 'Credit' ? '#fff' : theme.colors.text }
+                ]}>
+                  Credit
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.editActions}>
+              <TouchableOpacity
+                style={[styles.editButton, { backgroundColor: theme.colors.secondary }]}
+                onPress={() => setEditingTransaction(null)}
+              >
+                <Text style={styles.editButtonText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.editButton, { backgroundColor: theme.colors.primary }]}
+                onPress={saveTransactionEdit}
+              >
+                <Text style={styles.editButtonText}>{t('common.save') || 'Save'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
 
       {feedbackTransaction && (
         <View style={styles.feedbackOverlay}>
@@ -367,9 +573,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   categoryContainer: {
+    marginBottom: 12,
+  },
+  categoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
     flexWrap: 'wrap',
   },
   categoryLabel: {
@@ -458,6 +666,73 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   feedbackButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  editOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  editContainer: {
+    width: '100%',
+    padding: 20,
+    borderRadius: 12,
+    maxHeight: '80%',
+  },
+  editTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  editLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 6,
+    marginTop: 12,
+  },
+  editInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 4,
+  },
+  directionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  directionButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  directionButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  editActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 16,
+  },
+  editButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 6,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  editButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '500',

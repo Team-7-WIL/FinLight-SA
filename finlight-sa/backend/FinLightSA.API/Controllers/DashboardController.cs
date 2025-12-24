@@ -50,6 +50,30 @@ public class DashboardController : ControllerBase
                 .Where(e => e.BusinessId == businessId && e.Date >= start && e.Date <= end)
                 .SumAsync(e => (double)e.Amount);
 
+            // Calculate expenses from bank transactions (Debits with category)
+            var bankExpenses = await _context.BankTransactions
+                .Include(t => t.BankStatement)
+                .Where(t => t.BankStatement.BusinessId == businessId && 
+                            t.Direction == "Debit" && 
+                            !string.IsNullOrEmpty(t.AiCategory) &&
+                            t.TxnDate >= start && 
+                            t.TxnDate <= end)
+                .SumAsync(t => (double)t.Amount);
+            
+            totalExpenses += bankExpenses;
+
+            // Calculate income from bank transactions (Credits with category)
+            var bankIncome = await _context.BankTransactions
+                .Include(t => t.BankStatement)
+                .Where(t => t.BankStatement.BusinessId == businessId && 
+                            t.Direction == "Credit" && 
+                            !string.IsNullOrEmpty(t.AiCategory) &&
+                            t.TxnDate >= start && 
+                            t.TxnDate <= end)
+                .SumAsync(t => (double)t.Amount);
+            
+            totalIncome += bankIncome;
+
             // Count pending and overdue invoices
             var pendingInvoices = await _context.Invoices
                 .CountAsync(i => i.BusinessId == businessId && i.Status == "Sent");
@@ -57,8 +81,8 @@ public class DashboardController : ControllerBase
             var overdueInvoices = await _context.Invoices
                 .CountAsync(i => i.BusinessId == businessId && i.Status == "Overdue");
 
-            // Top expense categories
-            var topCategories = await _context.Expenses
+            // Top expense categories from Expenses table
+            var expenseCategories = await _context.Expenses
                 .Where(e => e.BusinessId == businessId && e.Date >= start && e.Date <= end)
                 .GroupBy(e => e.Category)
                 .Select(g => new CategoryExpenseDto
@@ -68,6 +92,34 @@ public class DashboardController : ControllerBase
                     Count = g.Count()
                 })
                 .ToListAsync();
+
+            // Add categories from bank transactions (Debits)
+            var bankTransactionCategories = await _context.BankTransactions
+                .Include(t => t.BankStatement)
+                .Where(t => t.BankStatement.BusinessId == businessId && 
+                            t.Direction == "Debit" && 
+                            !string.IsNullOrEmpty(t.AiCategory) &&
+                            t.TxnDate >= start && 
+                            t.TxnDate <= end)
+                .GroupBy(t => t.AiCategory)
+                .Select(g => new CategoryExpenseDto
+                {
+                    Category = g.Key,
+                    Amount = (decimal)g.Sum(t => (double)t.Amount),
+                    Count = g.Count()
+                })
+                .ToListAsync();
+
+            // Merge categories
+            var topCategories = expenseCategories.Concat(bankTransactionCategories)
+                .GroupBy(c => c.Category)
+                .Select(g => new CategoryExpenseDto
+                {
+                    Category = g.Key,
+                    Amount = g.Sum(c => c.Amount),
+                    Count = g.Sum(c => c.Count)
+                })
+                .ToList();
 
             // Order by amount in memory since SQLite doesn't support decimal ordering
             topCategories = topCategories
@@ -89,6 +141,30 @@ public class DashboardController : ControllerBase
                 var monthExpenses = await _context.Expenses
                     .Where(exp => exp.BusinessId == businessId && exp.Date >= monthStart && exp.Date <= monthEnd)
                     .SumAsync(exp => (double)exp.Amount);
+
+                // Add bank transaction debits
+                var monthBankExpenses = await _context.BankTransactions
+                    .Include(t => t.BankStatement)
+                    .Where(t => t.BankStatement.BusinessId == businessId && 
+                                t.Direction == "Debit" && 
+                                !string.IsNullOrEmpty(t.AiCategory) &&
+                                t.TxnDate >= monthStart && 
+                                t.TxnDate <= monthEnd)
+                    .SumAsync(t => (double)t.Amount);
+
+                monthExpenses += monthBankExpenses;
+
+                // Add bank transaction credits as income
+                var monthBankIncome = await _context.BankTransactions
+                    .Include(t => t.BankStatement)
+                    .Where(t => t.BankStatement.BusinessId == businessId && 
+                                t.Direction == "Credit" && 
+                                !string.IsNullOrEmpty(t.AiCategory) &&
+                                t.TxnDate >= monthStart && 
+                                t.TxnDate <= monthEnd)
+                    .SumAsync(t => (double)t.Amount);
+
+                monthIncome += monthBankIncome;
 
                 monthlyTrends.Add(new MonthlyTrendDto
                 {

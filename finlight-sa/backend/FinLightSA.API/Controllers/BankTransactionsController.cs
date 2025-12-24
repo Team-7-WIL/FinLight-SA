@@ -364,6 +364,16 @@ public class BankTransactionsController : ControllerBase
             if (!string.IsNullOrEmpty(request.Reference))
                 transaction.Reference = request.Reference;
 
+            // Allow editing date and amount
+            if (request.TxnDate.HasValue && request.TxnDate.Value != default)
+                transaction.TxnDate = request.TxnDate.Value;
+
+            if (request.Amount.HasValue && request.Amount.Value > 0)
+                transaction.Amount = request.Amount.Value;
+
+            if (!string.IsNullOrEmpty(request.Direction) && (request.Direction == "Debit" || request.Direction == "Credit"))
+                transaction.Direction = request.Direction;
+
             await _context.SaveChangesAsync();
 
             var transactionDto = new BankTransactionDto
@@ -396,6 +406,51 @@ public class BankTransactionsController : ControllerBase
             });
         }
     }
+
+    [HttpDelete("{id}")]
+    public async Task<ActionResult<ApiResponse<object>>> DeleteBankTransaction(Guid id)
+    {
+        try
+        {
+            var businessId = GetBusinessId();
+            var transaction = await _context.BankTransactions
+                .FirstOrDefaultAsync(t => t.Id == id && t.BankStatement.BusinessId == businessId);
+
+            if (transaction == null)
+                return NotFound(new ApiResponse<object>
+                {
+                    Success = false,
+                    Message = "Transaction not found"
+                });
+
+            _context.BankTransactions.Remove(transaction);
+            await _context.SaveChangesAsync();
+
+            // Audit log
+            await _auditService.LogActionAsync(
+                "Deleted",
+                "BankTransaction",
+                id,
+                $"Deleted bank transaction: {transaction.Description}"
+            );
+
+            return Ok(new ApiResponse<object>
+            {
+                Success = true,
+                Message = "Transaction deleted successfully"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting transaction");
+            return StatusCode(500, new ApiResponse<object>
+            {
+                Success = false,
+                Message = "Error deleting transaction",
+                Errors = new List<string> { ex.Message }
+            });
+        }
+    }
 }
 
 // Additional DTOs for this controller
@@ -408,4 +463,7 @@ public class UpdateBankTransactionRequest
 {
     public string? Description { get; set; }
     public string? Reference { get; set; }
+    public DateTime? TxnDate { get; set; }
+    public decimal? Amount { get; set; }
+    public string? Direction { get; set; } // "Debit" or "Credit"
 }

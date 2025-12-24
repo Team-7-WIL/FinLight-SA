@@ -109,45 +109,74 @@ export default function OCRScanScreen({ navigation, route }) {
       const formData = new FormData();
 
       // Get file info
-      const response = await fetch(selectedImage);
-      const blob = await response.blob();
-
-      const fileName = selectedImage.split('/').pop();
-      const file = {
-        uri: selectedImage,
-        name: fileName,
-        type: 'image/jpeg',
-      };
+      let file;
+      try {
+        const response = await fetch(selectedImage);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch image: ${response.statusText}`);
+        }
+        const blob = await response.blob();
+        
+        const fileName = selectedImage.split('/').pop() || 'image.jpg';
+        file = {
+          uri: selectedImage,
+          name: fileName,
+          type: blob.type || 'image/jpeg',
+        };
+      } catch (fetchError) {
+        console.error('Error fetching image:', fetchError);
+        Alert.alert(t('common.error'), t('messages.failedToLoadImage'));
+        setIsProcessing(false);
+        return;
+      }
 
       if (documentType === 'receipt') {
         formData.append('Image', file);
         formData.append('AutoCategorize', 'true');
 
-        const result = await apiClient.post('/ocr/process-receipt', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-
-        if (result.data.success) {
-          navigation.navigate('ProcessReceiptResult', {
-            receiptData: result.data.data,
-            imageUri: selectedImage
+        try {
+          const result = await apiClient.post('/ocr/process-receipt', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
           });
+
+          if (result.data.success) {
+            navigation.navigate('ProcessReceiptResult', {
+              receiptData: result.data.data,
+              imageUri: selectedImage
+            });
+          } else {
+            Alert.alert(t('common.error'), result.data.message || t('messages.processingFailed'));
+          }
+        } catch (apiError) {
+          console.error('Error processing receipt:', apiError);
+          const errorMessage = apiError.response?.data?.message || apiError.message || t('messages.processingFailed');
+          Alert.alert(t('common.error'), errorMessage);
         }
       } else {
+        // Invoice processing
         formData.append('Image', file);
         formData.append('AutoProcess', 'true');
 
-        const result = await apiClient.post('/ocr/process-invoice', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
+        try {
+          const result = await apiClient.post('/ocr/process-invoice', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          });
 
-        if (result.data.success) {
-          Alert.alert(t('common.success'), t('messages.invoiceProcessed'));
-          // Could navigate to invoice creation with processed data
+          if (result.data.success) {
+            Alert.alert(t('common.success'), t('messages.invoiceProcessed'));
+            // Navigate to invoice creation with processed data if needed
+            navigation.goBack();
+          } else {
+            Alert.alert(t('common.error'), result.data.message || t('messages.processingFailed'));
+          }
+        } catch (apiError) {
+          console.error('Error processing invoice:', apiError);
+          const errorMessage = apiError.response?.data?.message || apiError.message || t('messages.processingFailed');
+          Alert.alert(t('common.error'), errorMessage);
         }
       }
     } catch (error) {

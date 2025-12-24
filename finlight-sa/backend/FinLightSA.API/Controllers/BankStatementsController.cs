@@ -223,17 +223,27 @@ public class BankStatementsController : ControllerBase
             {
                 transactions = ParseCsvBankStatement(bankStatement.FileData, bankStatement.Id);
             }
+            else if (bankStatement.ContentType?.Contains("pdf") == true ||
+                     bankStatement.FileName?.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                // Extract from PDF using AI Service OCR
+                transactions = await ExtractFromPdfBankStatement(bankStatement.FileData, bankStatement.Id);
+            }
             else if (bankStatement.ContentType?.Contains("spreadsheet") == true ||
                      bankStatement.FileName?.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) == true ||
                      bankStatement.FileName?.EndsWith(".xls", StringComparison.OrdinalIgnoreCase) == true)
             {
-                // For now, we'll create sample transactions for Excel files
-                transactions = CreateSampleTransactions(bankStatement.Id);
+                // For Excel files, use AI Service
+                transactions = await ExtractFromExcelBankStatement(bankStatement.FileData, bankStatement.Id);
             }
             else
             {
-                // For PDF or other formats, create sample transactions
-                transactions = CreateSampleTransactions(bankStatement.Id);
+                // Fallback: try to use AI Service for unknown formats
+                transactions = await ExtractFromPdfBankStatement(bankStatement.FileData, bankStatement.Id);
+                if (!transactions.Any())
+                {
+                    transactions = CreateSampleTransactions(bankStatement.Id);
+                }
             }
 
             // Add transactions to the database
@@ -398,6 +408,125 @@ public class BankStatementsController : ControllerBase
                 Errors = new List<string> { ex.Message }
             });
         }
+    }
+
+    private async Task<List<BankTransaction>> ExtractFromPdfBankStatement(byte[] fileData, Guid bankStatementId)
+    {
+        var transactions = new List<BankTransaction>();
+        try
+        {
+            // Send to AI Service for OCR extraction
+            using (var client = new HttpClient())
+            {
+                client.Timeout = TimeSpan.FromSeconds(30);
+                using (var content = new ByteArrayContent(fileData))
+                {
+                    content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+                    
+                    var response = await client.PostAsync("http://localhost:8000/extract-bank-statement", content);
+                    
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var jsonResponse = await response.Content.ReadAsStringAsync();
+                        var extractedData = System.Text.Json.JsonDocument.Parse(jsonResponse);
+                        var root = extractedData.RootElement;
+                        
+                        if (root.TryGetProperty("transactions", out var txnArray))
+                        {
+                            foreach (var txn in txnArray.EnumerateArray())
+                            {
+                                if (DateTime.TryParse(txn.GetProperty("date").GetString(), out var date) &&
+                                    decimal.TryParse(txn.GetProperty("amount").GetString(), out var amount))
+                                {
+                                    transactions.Add(new BankTransaction
+                                    {
+                                        Id = Guid.NewGuid(),
+                                        BankStatementId = bankStatementId,
+                                        TxnDate = date,
+                                        Amount = Math.Abs(amount),
+                                        Direction = amount >= 0 ? "Credit" : "Debit",
+                                        Description = txn.GetProperty("description").GetString() ?? "Unknown",
+                                        Reference = txn.TryGetProperty("reference", out var ref_) ? ref_.GetString() : "",
+                                        CreatedAt = DateTime.UtcNow
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogWarning($"AI Service OCR failed: {response.StatusCode}");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error extracting from PDF, falling back to sample data");
+        }
+        
+        // If AI extraction failed, return empty list (not fallback samples)
+        // This allows the user to see that extraction failed
+        return transactions;
+    }
+
+    private async Task<List<BankTransaction>> ExtractFromExcelBankStatement(byte[] fileData, Guid bankStatementId)
+    {
+        var transactions = new List<BankTransaction>();
+        try
+        {
+            // For Excel, try CSV-like parsing first (if converted)
+            // Otherwise send to AI Service
+            transactions = ParseCsvBankStatement(fileData, bankStatementId);
+            if (!transactions.Any())
+            {
+                // Fall back to AI Service
+                using (var client = new HttpClient())
+                {
+                    client.Timeout = TimeSpan.FromSeconds(30);
+                    using (var content = new ByteArrayContent(fileData))
+                    {
+                        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+                        
+                        var response = await client.PostAsync("http://localhost:8000/extract-bank-statement", content);
+                        if (response.IsSuccessStatusCode)
+                        {
+                            var jsonResponse = await response.Content.ReadAsStringAsync();
+                            var extractedData = System.Text.Json.JsonDocument.Parse(jsonResponse);
+                            var root = extractedData.RootElement;
+                            
+                            if (root.TryGetProperty("transactions", out var txnArray))
+                            {
+                                foreach (var txn in txnArray.EnumerateArray())
+                                {
+                                    if (DateTime.TryParse(txn.GetProperty("date").GetString(), out var date) &&
+                                        decimal.TryParse(txn.GetProperty("amount").GetString(), out var amount))
+                                    {
+                                        transactions.Add(new BankTransaction
+                                        {
+                                            Id = Guid.NewGuid(),
+                                            BankStatementId = bankStatementId,
+                                            TxnDate = date,
+                                            Amount = Math.Abs(amount),
+                                            Direction = amount >= 0 ? "Credit" : "Debit",
+                                            Description = txn.GetProperty("description").GetString() ?? "Unknown",
+                                            Reference = txn.TryGetProperty("reference", out var ref_) ? ref_.GetString() : "",
+                                            CreatedAt = DateTime.UtcNow
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error extracting from Excel");
+        }
+        
+        return transactions;
     }
 
     [HttpGet("{id}/file")]

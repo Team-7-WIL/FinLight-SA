@@ -82,12 +82,47 @@ You should see:
 
 **Solution**: Install Tesseract OCR
 
-1. Download Tesseract for Windows from: https://github.com/UB-Mannheim/tesseract/wiki
-2. Install it (default location: `C:\Program Files\Tesseract-OCR\`)
-3. Restart the AI service
-4. The service will automatically detect Tesseract
+1. Download Tesseract for Windows from: https://github.com/tesseract-ocr/tesseract/wiki/Downloads
+2. Run the installer and use default settings (installs to `C:\Program Files\Tesseract-OCR\`)
+3. The service will automatically detect it on startup
+4. You should see: `✓ Tesseract OCR service enabled` in logs
 
-If Tesseract is installed in a non-standard location, the service will try to find it automatically. If it still doesn't work, you may need to add Tesseract to your system PATH.
+**If Tesseract is still not found:**
+
+The service searches these locations automatically:
+- `C:\Program Files\Tesseract-OCR\tesseract.exe` (default 64-bit)
+- `C:\Program Files (x86)\Tesseract-OCR\tesseract.exe` (default 32-bit)
+- `C:\Users\<YourUsername>\AppData\Local\Programs\Tesseract-OCR\tesseract.exe`
+- Chocolatey installation path: `C:\ProgramData\chocolatey\lib\tesseract\tools\tesseract.exe`
+
+**Manual Configuration (if auto-detection fails):**
+
+Windows PowerShell:
+```powershell
+$env:TESSERACT_PATH="C:\Program Files\Tesseract-OCR\tesseract.exe"
+python -m uvicorn main:app --reload --port 8000
+```
+
+Windows Command Prompt:
+```cmd
+set TESSERACT_PATH=C:\Program Files\Tesseract-OCR\tesseract.exe
+python -m uvicorn main:app --reload --port 8000
+```
+
+**Permanent Configuration (all sessions):**
+1. Right-click "This PC" → Properties
+2. Click "Advanced system settings"
+3. Click "Environment Variables"
+4. Click "New" → Create variable named `TESSERACT_PATH`
+5. Value: `C:\Program Files\Tesseract-OCR\tesseract.exe`
+6. Click OK and restart terminal/IDE
+
+**Verify Tesseract Installation:**
+```bash
+tesseract --version
+```
+
+Should output something like: `tesseract 5.x.x`
 
 ### Issue: Receipt scanning returns "Unknown Vendor" or empty data
 

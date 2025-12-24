@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import useThemeStore from '../store/useThemeStore';
 import { useLanguage } from '../contexts/LanguageContext';
 import apiClient from '../config/api';
@@ -20,9 +21,11 @@ export default function ProductsScreen({ navigation }) {
   const { theme } = useThemeStore();
   const { t } = useLanguage();
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const loadData = async () => {
     try {

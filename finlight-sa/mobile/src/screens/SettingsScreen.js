@@ -178,7 +178,7 @@ export default function SettingsScreen({ navigation }) {
           onPress={() => navigation.navigate('AuditLogs')}
         >
           <Text style={[styles.menuItemText, { color: theme.colors.text }]}>
-            📋 Audit Logs
+            Audit Logs
           </Text>
           <Text style={[styles.menuItemChevron, { color: theme.colors.textSecondary }]}>›</Text>
         </TouchableOpacity>

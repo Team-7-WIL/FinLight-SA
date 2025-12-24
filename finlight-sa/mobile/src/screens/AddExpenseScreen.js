@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { MediaType, launchImageLibraryAsync, requestMediaLibraryPermissionsAsync } from 'expo-image-picker';
+import * as ImagePicker from 'expo-image-picker';
 import useThemeStore from '../store/useThemeStore';
 import { useLanguage } from '../contexts/LanguageContext';
 import apiClient from '../config/api';
@@ -53,7 +53,7 @@ export default function AddExpenseScreen({ navigation }) {
       console.log('Starting receipt scan...');
 
       // Request camera permissions
-      const { status } = await requestMediaLibraryPermissionsAsync();
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(t('common.error'), t('messages.cameraPermissionNeeded'));
         return;
@@ -61,8 +61,8 @@ export default function AddExpenseScreen({ navigation }) {
 
       console.log('Opening image picker...');
       // Use image picker (works on both web and native)
-      const result = await launchImageLibraryAsync({
-        mediaTypes: [MediaType.IMAGE],
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
@@ -95,10 +95,8 @@ export default function AddExpenseScreen({ navigation }) {
         formData.append('Image', file);
       }
       
-      formData.append('AutoCategorize', 'true');
-
       console.log('Uploading receipt for OCR processing...');
-      const response = await apiClient.post('/ocr/receipt', formData, {
+      const response = await apiClient.post('/ocr/process-receipt', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

@@ -50,10 +50,10 @@ export default function ExpensesScreen({ navigation }) {
     >
       <View style={styles.expenseHeader}>
         <Text style={[styles.category, { color: theme.colors.text }]}>
-          {item.category}
+          {item.category || 'Uncategorized'}
         </Text>
         <Text style={[styles.amount, { color: theme.colors.error }]}>
-          {`-R${item.amount.toFixed(2)}`}
+          {`-R${(item.amount || 0).toFixed(2)}`}
         </Text>
       </View>
       {item.vendor && (
@@ -61,9 +61,11 @@ export default function ExpensesScreen({ navigation }) {
           {item.vendor}
         </Text>
       )}
-      <Text style={[styles.date, { color: theme.colors.textSecondary }]}>
-        {new Date(item.date).toLocaleDateString()}
-      </Text>
+      {item.date && (
+        <Text style={[styles.date, { color: theme.colors.textSecondary }]}>
+          {new Date(item.date).toLocaleDateString()}
+        </Text>
+      )}
       {item.notes && (
         <Text style={[styles.notes, { color: theme.colors.textSecondary }]}>
           {item.notes}

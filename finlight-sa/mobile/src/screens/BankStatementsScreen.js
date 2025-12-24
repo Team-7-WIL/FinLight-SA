@@ -44,13 +44,31 @@ export default function BankStatementsScreen({ navigation }) {
 
   const pickDocument = async () => {
     try {
+      console.log('📁 Document picker opened...');
       const result = await DocumentPicker.getDocumentAsync({
         type: ['application/pdf', 'text/csv', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'],
         copyToCacheDirectory: true,
       });
 
-      if (result.type === 'success') {
+      console.log('📁 Document picker result type:', result.type);
+      console.log('📁 Document picker canceled:', result.canceled);
+      console.log('📁 Document picker result:', result);
+
+      // Handle web format: { canceled: false, assets: [...] }
+      if (result.canceled === false && result.assets && result.assets.length > 0) {
+        console.log('✅ Document selected (web format), starting upload...');
+        const webDocument = result.assets[0];
+        await uploadBankStatement(webDocument);
+      }
+      // Handle native format: { type: 'success' }
+      else if (result.type === 'success') {
+        console.log('✅ Document selected (native format), starting upload...');
         await uploadBankStatement(result);
+      } else if (result.canceled === true || result.type === 'cancel') {
+        console.log('❌ Document picker cancelled by user');
+      } else {
+        console.log('⚠️ Document picker returned unexpected format:', result);
+        Alert.alert(t('common.error'), t('messages.failedToPickDocument'));
       }
     } catch (error) {
       console.error('Error picking document:', error);
@@ -59,63 +77,94 @@ export default function BankStatementsScreen({ navigation }) {
   };
 
   const uploadBankStatement = async (document) => {
+    console.log('\n🚀 ===== UPLOAD START =====');
+    console.log('Time:', new Date().toISOString());
+    console.log('Document object keys:', Object.keys(document));
     setIsUploading(true);
     try {
+      console.log('=== BANK STATEMENT UPLOAD STARTED ===');
       console.log('Starting bank statement upload...');
 
-      if (!document.uri) {
-        console.error('No document URI provided');
+      // Handle both web and native formats
+      const documentUri = document.uri || (document.blob ? URL.createObjectURL(document.blob) : null);
+      const documentName = document.name || 'bank_statement.pdf';
+      const documentMimeType = document.mimeType || 'application/octet-stream';
+      const documentSize = document.size || 0;
+
+      if (!documentUri) {
+        console.error('❌ No document URI provided');
         Alert.alert(t('common.error'), t('messages.noFileSelected'));
         setIsUploading(false);
         return;
       }
 
       console.log('Document details:', {
-        uri: document.uri,
-        name: document.name,
-        mimeType: document.mimeType,
-        size: document.size,
+        uri: documentUri,
+        name: documentName,
+        mimeType: documentMimeType,
+        size: documentSize,
       });
 
       const formData = new FormData();
+      
+      // Determine MIME type
+      const mimeType = documentMimeType || 'application/octet-stream';
+      const fileName = documentName || `bank_statement_${Date.now()}.pdf`;
 
       if (Platform.OS === 'web') {
         // Web: fetch the file as blob and append to FormData
-        const response = await fetch(document.uri);
-        const blob = await response.blob();
-        formData.append('file', blob, document.name || `bank_statement_${Date.now()}.pdf`);
+        try {
+          const response = await fetch(documentUri);
+          const blob = await response.blob();
+          formData.append('file', blob, fileName);
+          console.log('✅ Web FormData created with blob');
+          console.log('📦 Blob size:', blob.size, 'bytes');
+        } catch (fetchError) {
+          console.error('❌ Error fetching file for web:', fetchError);
+          throw new Error('Failed to fetch file');
+        }
       } else {
         // Native: use uri, name, and type properties
         const fileToUpload = {
-          uri: document.uri,
-          name: document.name || `bank_statement_${Date.now()}.pdf`,
-          type: document.mimeType || 'application/pdf',
+          uri: documentUri,
+          name: fileName,
+          type: mimeType,
         };
         formData.append('file', fileToUpload);
+        console.log('✅ Native FormData created');
+        console.log('📦 File details:', {
+          uri: fileToUpload.uri,
+          name: fileToUpload.name,
+          type: fileToUpload.type,
+          mimeType: documentMimeType,
+        });
       }
 
-      console.log('Uploading bank statement...');
-      // axios will automatically set Content-Type with boundary for FormData
-      const response = await apiClient.post('/bankstatements', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      console.log('FormData ready, uploading to /bankstatements...');
+      console.log('Making POST request to /bankstatements');
+      console.log('FormData object:', formData);
+      console.log('📤 Sending POST request to:', '/bankstatements');
+      console.log('⏱️ Request timestamp:', new Date().toISOString());
       
-      console.log('Bank statement upload response:', response.data);
+      const response = await apiClient.post('/bankstatements', formData);
+      
+      console.log('📥 Response received');
+      console.log('Bank statement upload response status:', response.status);
+      console.log('Bank statement upload response data:', response.data);
 
       if (response.data.success) {
-        console.log('Upload successful, bank statement ID:', response.data.data.id);
+        console.log('✅ Upload successful, bank statement ID:', response.data.data.id);
+        console.log('📊 Response data:', response.data.data);
         Alert.alert(t('common.success'), t('messages.bankStatementUploaded'));
         // Kick off processing immediately to create transactions
         try {
-          console.log('Processing bank statement...');
+          console.log('🔄 Processing bank statement...');
           const processResponse = await apiClient.post(`/bankstatements/${response.data.data.id}/process`);
-          console.log('Bank statement processed successfully:', processResponse.data);
+          console.log('✅ Bank statement processed successfully:', processResponse.data);
           // Navigate to transactions so the user sees results
           navigation.navigate('BankTransactions');
         } catch (processError) {
-          console.error('Error auto-processing bank statement:', processError);
+          console.error('❌ Error auto-processing bank statement:', processError);
           console.error('Process error details:', processError.response?.data);
           const processErrorMsg = processError.response?.data?.message || processError.message;
           Alert.alert(t('common.warning'), t('messages.bankStatementUploaded') + ' ' + (processErrorMsg || t('messages.failedToProcessStatement')));
@@ -123,20 +172,26 @@ export default function BankStatementsScreen({ navigation }) {
         loadBankStatements(); // Refresh the list
       } else {
         const errorMsg = response.data.message || t('messages.failedToUploadStatement');
-        console.error('Bank statement upload failed:', errorMsg);
+        console.error('❌ Bank statement upload failed:', errorMsg);
         Alert.alert(t('common.error'), errorMsg);
       }
     } catch (error) {
-      console.error('Error uploading bank statement:', error);
+      console.error('❌ Error uploading bank statement:', error.message);
       console.error('Full error details:', {
         message: error.message,
         response: error.response?.data,
         status: error.response?.status,
-        stack: error.stack,
+        code: error.code,
+        headers: error.config?.headers,
+        url: error.config?.url,
+        method: error.config?.method,
       });
       const errorMessage = error.response?.data?.message || error.message || t('messages.failedToUploadStatement');
       Alert.alert(t('common.error'), errorMessage);
     } finally {
+      console.log('🏁 Upload process ended');
+      console.log('⏱️ End timestamp:', new Date().toISOString());
+      console.log('🚀 ===== UPLOAD END =====\n');
       setIsUploading(false);
     }
   };

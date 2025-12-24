@@ -25,12 +25,16 @@ apiClient.interceptors.request.use(
   async (config) => {
     try {
       const token = await AsyncStorage.getItem('authToken');
+      console.log('Auth interceptor - token exists:', !!token);
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+        console.log('Authorization header set');
       }
       
       // If data is FormData, remove Content-Type header to let axios set it with boundary
       if (config.data instanceof FormData) {
+        console.log('FormData detected - removing Content-Type header to allow axios to set boundary');
+        console.log('FormData entries:', Array.from(config.data.entries()));
         delete config.headers['Content-Type'];
       }
     } catch (error) {

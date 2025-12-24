@@ -17,10 +17,10 @@ class OCRService:
                 # Test if tesseract is installed
                 pytesseract.get_tesseract_version()
                 self.vision_available = True
-                print("Tesseract OCR service enabled")
+                print("✓ Tesseract OCR service enabled")
             except Exception as e:
-                print(f"Tesseract not found in PATH: {e}")
-                print("Please install Tesseract OCR: https://github.com/tesseract-ocr/tesseract")
+                print(f"⚠ Tesseract not found in PATH: {e}")
+                print("ℹ Attempting to locate Tesseract installation...")
                 # Try to set tesseract path (common Windows location)
                 if os.name == 'nt':  # Windows
                     possible_paths = [
@@ -29,15 +29,57 @@ class OCRService:
                         r'C:\Users\{}\AppData\Local\Programs\Tesseract-OCR\tesseract.exe'.format(os.environ.get('USERNAME', '')),
                         r'C:\Users\{}\tesseract-ocr\tesseract.exe'.format(os.environ.get('USERNAME', '')),
                         r'C:\ProgramData\chocolatey\lib\tesseract\tools\tesseract.exe',
+                        # Additional Windows paths
+                        r'C:\Tesseract-OCR\tesseract.exe',
+                        r'C:\tesseract\tesseract.exe',
+                        # Check environment variable
+                        os.environ.get('TESSERACT_PATH', ''),
+                    ]
+                    found = False
+                    for path in possible_paths:
+                        if path and os.path.exists(path):
+                            pytesseract.pytesseract.tesseract_cmd = path
+                            try:
+                                pytesseract.get_tesseract_version()
+                                self.vision_available = True
+                                print(f"✓ Tesseract found at: {path}")
+                                found = True
+                                break
+                            except Exception as verify_error:
+                                print(f"✗ Path exists but failed to verify: {path} ({verify_error})")
+                                continue
+                    
+                    if not found:
+                        print("\n✗ Tesseract OCR not found!")
+                        print("📍 Please install Tesseract from: https://github.com/tesseract-ocr/tesseract")
+                        print("📍 Common installation paths:")
+                        print("   - Default: C:\\Program Files\\Tesseract-OCR\\tesseract.exe")
+                        print("   - Alternative: C:\\Program Files (x86)\\Tesseract-OCR\\tesseract.exe")
+                        print("🔧 Or set TESSERACT_PATH environment variable")
+                else:
+                    # Non-Windows systems
+                    possible_paths = [
+                        '/usr/bin/tesseract',
+                        '/usr/local/bin/tesseract',
+                        '/opt/tesseract/bin/tesseract',
+                        os.environ.get('TESSERACT_PATH', ''),
                     ]
                     for path in possible_paths:
-                        if os.path.exists(path):
+                        if path and os.path.exists(path):
                             pytesseract.pytesseract.tesseract_cmd = path
-                            self.vision_available = True
-                            print(f"Tesseract found at: {path}")
-                            break
+                            try:
+                                pytesseract.get_tesseract_version()
+                                self.vision_available = True
+                                print(f"✓ Tesseract found at: {path}")
+                                break
+                            except:
+                                continue
+                    
+                    if not self.vision_available:
+                        print("✗ Tesseract OCR not found!")
+                        print("Install with: apt-get install tesseract-ocr (Ubuntu/Debian)")
         except Exception as e:
-            print(f"OCR initialization error: {e}")
+            print(f"✗ OCR initialization error: {e}")
 
     def is_available(self) -> bool:
         return self.vision_available
@@ -114,17 +156,18 @@ class OCRService:
         """
         Extract monetary amounts from text
         """
-        # Look for currency patterns
+        # Look for currency patterns - prioritize TOTAL line
         patterns = [
+            r'(?:TOTAL|Total)\s+[\$R]?\s*(\d+[\.,\-]\d{2})',  # TOTAL $27.96 or Total 255-00
             r'R\s*(\d+[\.,]\d{2})',  # R 100.00
-            r'(\d+[\.,]\d{2})\s*ZAR',  # 100.00 ZAR
-            r'Total[:\s]+R?\s*(\d+[\.,]\d{2})',  # Total: R 100.00
+            r'[\$R]\s*(\d+[\.,\-]\d{2})',  # $100.00 or R100.00
+            r'(\d+[\.,]\d{2})\s*(?:ZAR|USD|EUR)',  # 100.00 ZAR
         ]
         
         for pattern in patterns:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
-                amount_str = match.group(1).replace(',', '.')
+                amount_str = match.group(1).replace(',', '.').replace('-', '.')
                 try:
                     return float(amount_str)
                 except ValueError:
@@ -150,15 +193,15 @@ class OCRService:
         Extract VAT amount from text
         """
         patterns = [
-            r'VAT[:\s]+R?\s*(\d+[\.,]\d{2})',
-            r'VAT\s+AMOUNT[:\s]+R?\s*(\d+[\.,]\d{2})',
-            r'TAX[:\s]+R?\s*(\d+[\.,]\d{2})',
+            r'(?:GST|VAT)\s+(?:Included in Total|Amount)[:\s]+[\$R]?\s*(\d+[\.,\-]\d{2})',
+            r'(?:GST|VAT)[:\s]+[\$R]?\s*(\d+[\.,\-]\d{2})',
+            r'TAX[:\s]+[\$R]?\s*(\d+[\.,\-]\d{2})',
         ]
         
         for pattern in patterns:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
-                amount_str = match.group(1).replace(',', '.')
+                amount_str = match.group(1).replace(',', '.').replace('-', '.')
                 try:
                     return float(amount_str)
                 except ValueError:

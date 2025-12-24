@@ -25,6 +25,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Product> Products { get; set; }
     public DbSet<Invoice> Invoices { get; set; }
     public DbSet<InvoiceItem> InvoiceItems { get; set; }
+    public DbSet<InvoiceTemplate> InvoiceTemplates { get; set; }
     public DbSet<Payment> Payments { get; set; }
     public DbSet<PaymentAllocation> PaymentAllocations { get; set; }
     public DbSet<Expense> Expenses { get; set; }
@@ -156,6 +157,20 @@ public class ApplicationDbContext : DbContext
                 .WithMany(p => p.InvoiceItems)
                 .HasForeignKey(e => e.ProductId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // InvoiceTemplate configuration
+        modelBuilder.Entity<InvoiceTemplate>(entity =>
+        {
+            entity.ToTable("invoice_templates");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.TemplateData).IsRequired();
+
+            entity.HasOne(e => e.Business)
+                .WithMany()
+                .HasForeignKey(e => e.BusinessId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // Payment configuration

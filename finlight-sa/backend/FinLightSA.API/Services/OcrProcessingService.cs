@@ -240,11 +240,11 @@ public class OcrProcessingService
                 var result = new ReceiptProcessingResult
                 {
                     Vendor = root.GetProperty("vendor").GetString() ?? "Unknown",
-                    Amount = root.TryGetProperty("amount", out var amountEl) ? amountEl.GetDecimal() : 0,
+                    Amount = root.TryGetProperty("amount", out var amountEl) && amountEl.ValueKind != JsonValueKind.Null ? amountEl.GetDecimal() : 0,
                     Date = root.TryGetProperty("date", out var dateEl) ? dateEl.GetString() ?? DateTime.Now.ToString("yyyy-MM-dd") : DateTime.Now.ToString("yyyy-MM-dd"),
-                    VatAmount = root.TryGetProperty("vat_amount", out var vatEl) ? vatEl.GetDecimal() : 0,
+                    VatAmount = root.TryGetProperty("vat_amount", out var vatEl) && vatEl.ValueKind != JsonValueKind.Null ? vatEl.GetDecimal() : 0,
                     RawText = root.TryGetProperty("raw_text", out var rawTextEl) ? rawTextEl.GetString() ?? "" : "",
-                    Confidence = root.TryGetProperty("confidence", out var confEl) ? confEl.GetDecimal() : 0.5m,
+                    Confidence = root.TryGetProperty("confidence", out var confEl) && confEl.ValueKind != JsonValueKind.Null ? confEl.GetDecimal() : 0.5m,
                     Items = new List<ReceiptItemDto>()
                 };
                 
