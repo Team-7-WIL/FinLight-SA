@@ -1,7 +1,20 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5175/api';
+// Use machine IP for Android emulator (better than 10.0.0.2), localhost for web/iOS simulator
+const getApiUrl = () => {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+  if (Platform.OS === 'android') {
+    // Use the host machine's WiFi IP address for Android emulator
+    return 'http://192.168.1.102:5175/api';
+  }
+  return 'http://localhost:5175/api';
+};
+
+const API_URL = getApiUrl();
 
 console.log('API_URL:', API_URL);
 

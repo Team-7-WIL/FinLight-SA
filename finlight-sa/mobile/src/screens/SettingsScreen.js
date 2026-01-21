@@ -40,19 +40,22 @@ export default function SettingsScreen({ navigation }) {
       Alert.alert(t('common.success'), t('common.languageChanged'));
     } catch (error) {
       console.error('Error saving language:', error);
-      Alert.alert(t('common.error'), 'Failed to save language preference');
+      Alert.alert(t('common.error'), t('messages.failedToSaveLanguage'));
     }
   };
 
   const handleLogout = () => {
     Alert.alert(
       t('auth.logout'),
-      t('settings.confirmLogout') || 'Are you sure you want to logout?',
+      t('settings.confirmLogout'),
       [
         { text: t('common.cancel'), style: 'cancel' },
         {
           text: t('auth.logout'),
-          onPress: () => logout(),
+          onPress: async () => {
+            await logout();
+            console.log('Logout complete, should redirect to login...');
+          },
           style: 'destructive',
         },
       ],

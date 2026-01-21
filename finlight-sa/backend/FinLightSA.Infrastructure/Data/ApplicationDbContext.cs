@@ -26,6 +26,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<Invoice> Invoices { get; set; }
     public DbSet<InvoiceItem> InvoiceItems { get; set; }
     public DbSet<InvoiceTemplate> InvoiceTemplates { get; set; }
+    public DbSet<Quotation> Quotations { get; set; }
+    public DbSet<QuotationItem> QuotationItems { get; set; }
     public DbSet<Payment> Payments { get; set; }
     public DbSet<PaymentAllocation> PaymentAllocations { get; set; }
     public DbSet<Expense> Expenses { get; set; }
@@ -171,6 +173,52 @@ public class ApplicationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.BusinessId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Quotation configuration
+        modelBuilder.Entity<Quotation>(entity =>
+        {
+            entity.ToTable("quotations");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Number).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Subtotal).HasPrecision(18, 2);
+            entity.Property(e => e.VatAmount).HasPrecision(18, 2);
+            entity.Property(e => e.Total).HasPrecision(18, 2);
+
+            entity.HasOne(e => e.Business)
+                .WithMany(b => b.Quotations)
+                .HasForeignKey(e => e.BusinessId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Customer)
+                .WithMany(c => c.Quotations)
+                .HasForeignKey(e => e.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.ConvertedToInvoice)
+                .WithMany()
+                .HasForeignKey(e => e.ConvertedToInvoiceId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // QuotationItem configuration
+        modelBuilder.Entity<QuotationItem>(entity =>
+        {
+            entity.ToTable("quotation_items");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UnitPrice).HasPrecision(18, 2);
+            entity.Property(e => e.VatRate).HasPrecision(5, 4);
+            entity.Property(e => e.LineTotal).HasPrecision(18, 2);
+
+            entity.HasOne(e => e.Quotation)
+                .WithMany(q => q.Items)
+                .HasForeignKey(e => e.QuotationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Product)
+                .WithMany()
+                .HasForeignKey(e => e.ProductId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // Payment configuration

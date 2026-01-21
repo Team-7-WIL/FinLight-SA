@@ -18,17 +18,20 @@ public class InvoicesController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly PdfService _pdfService;
+    private readonly EmailService _emailService;
     private readonly ILogger<InvoicesController> _logger;
     private readonly AuditService _auditService;
 
     public InvoicesController(
         ApplicationDbContext context,
         PdfService pdfService,
+        EmailService emailService,
         ILogger<InvoicesController> logger,
         AuditService auditService)
     {
         _context = context;
         _pdfService = pdfService;
+        _emailService = emailService;
         _logger = logger;
         _auditService = auditService;
     }
@@ -416,4 +419,79 @@ public class InvoicesController : ControllerBase
             });
         }
     }
+
+    [HttpPost("{id}/send-email")]
+    public async Task<ActionResult<ApiResponse<bool>>> SendInvoiceEmail(Guid id, [FromBody] SendInvoiceEmailRequest? request)
+    {
+        try
+        {
+            var businessId = GetBusinessId();
+            var invoice = await _context.Invoices
+                .Include(i => i.Customer)
+                .Include(i => i.Items)
+                .Where(i => i.Id == id && i.BusinessId == businessId)
+                .FirstOrDefaultAsync();
+
+            if (invoice == null)
+            {
+                return NotFound(new ApiResponse<bool>
+                {
+                    Success = false,
+                    Message = "Invoice not found"
+                });
+            }
+
+            var customer = await _context.Customers.FindAsync(invoice.CustomerId);
+            if (customer == null || string.IsNullOrEmpty(customer.Email))
+            {
+                return BadRequest(new ApiResponse<bool>
+                {
+                    Success = false,
+                    Message = "Customer email not found"
+                });
+            }
+
+            var toEmail = request?.ToEmail ?? customer.Email;
+            var business = await _context.Businesses.FindAsync(businessId);
+            var pdfBytes = _pdfService.GenerateInvoicePdf(invoice, business!, customer);
+
+            var success = await _emailService.SendInvoiceEmailAsync(
+                toEmail,
+                customer.Name,
+                invoice.Number,
+                invoice.Total,
+                pdfBytes);
+
+            if (success)
+            {
+                invoice.Status = invoice.Status == "Draft" ? "Sent" : invoice.Status;
+                invoice.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+            }
+
+            return Ok(new ApiResponse<bool>
+            {
+                Success = success,
+                Message = success ? "Invoice email sent successfully" : "Failed to send invoice email",
+                Data = success
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending invoice email");
+            return StatusCode(500, new ApiResponse<bool>
+            {
+                Success = false,
+                Message = "Error sending invoice email",
+                Errors = new List<string> { ex.Message }
+            });
+        }
+    }
+}
+
+public class SendInvoiceEmailRequest
+{
+    public string? ToEmail { get; set; }
+    public string? Subject { get; set; }
+    public string? Message { get; set; }
 }

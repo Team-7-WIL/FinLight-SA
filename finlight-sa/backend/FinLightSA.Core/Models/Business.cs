@@ -16,6 +16,7 @@ public class Business
     public ICollection<ProductCategory> ProductCategories { get; set; } = new List<ProductCategory>();
     public ICollection<Product> Products { get; set; } = new List<Product>();
     public ICollection<Invoice> Invoices { get; set; } = new List<Invoice>();
+    public ICollection<Quotation> Quotations { get; set; } = new List<Quotation>();
     public ICollection<Expense> Expenses { get; set; } = new List<Expense>();
     public ICollection<BankStatement> BankStatements { get; set; } = new List<BankStatement>();
 }

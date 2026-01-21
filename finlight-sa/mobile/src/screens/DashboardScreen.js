@@ -32,12 +32,20 @@ export default function DashboardScreen({ navigation }) {
 
   const loadDashboard = async () => {
     try {
+      setIsLoading(true);
+      console.log('📊 Loading dashboard...');
       const response = await apiClient.get('/dashboard/summary');
+      console.log('Dashboard response:', response.data);
+      
       if (response.data.success) {
+        console.log('✅ Dashboard data loaded:', response.data.data);
         setSummary(response.data.data);
+      } else {
+        console.warn('❌ Dashboard request failed:', response.data.message);
       }
     } catch (error) {
-      console.error('Error loading dashboard:', error);
+      console.error('❌ Error loading dashboard:', error.message);
+      console.error('Error details:', error.response?.data);
     } finally {
       setIsLoading(false);
     }
@@ -71,11 +79,16 @@ export default function DashboardScreen({ navigation }) {
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.header}>
         <Text style={[styles.title, { color: theme.colors.text }]}>
-          {business?.name}
+          {business?.name || t('dashboard.businessDashboard')}
         </Text>
         <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
           {t('dashboard.title')}
         </Text>
+        {useAuthStore.getState().user && (
+          <Text style={[styles.userInfo, { color: theme.colors.textSecondary }]}>
+            {t('dashboard.loggedInAs')} {useAuthStore.getState().user.fullName}
+          </Text>
+        )}
       </View>
 
       <View style={styles.statsGrid}>
@@ -305,6 +318,11 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     marginTop: 4,
+  },
+  userInfo: {
+    fontSize: 12,
+    marginTop: 8,
+    fontStyle: 'italic',
   },
   statsGrid: {
     flexDirection: 'row',

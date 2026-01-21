@@ -124,7 +124,7 @@ export default function BankTransactionsScreen({ navigation }) {
   const deleteTransaction = async (transactionId) => {
     Alert.alert(
       t('common.delete') + ' ' + t('titles.bankTransactions'),
-      t('messages.deleteTransactionConfirm') || 'Are you sure you want to delete this transaction?',
+      t('messages.deleteTransactionConfirm'),
       [
         { text: t('common.cancel'), style: 'cancel' },
         {
@@ -134,14 +134,14 @@ export default function BankTransactionsScreen({ navigation }) {
             try {
               const response = await apiClient.delete(`/banktransactions/${transactionId}`);
               if (response.data.success) {
-                Alert.alert(t('common.success'), t('messages.transactionDeleted') || 'Transaction deleted successfully');
+                Alert.alert(t('common.success'), t('messages.transactionDeleted'));
                 loadTransactions(); // Refresh the list
               } else {
-                Alert.alert(t('common.error'), response.data.message || t('messages.failedToDeleteTransaction') || 'Failed to delete transaction');
+                Alert.alert(t('common.error'), response.data.message || t('messages.failedToDeleteTransaction'));
               }
             } catch (error) {
               console.error('Error deleting transaction:', error);
-              Alert.alert(t('common.error'), t('messages.failedToDeleteTransaction') || 'Failed to delete transaction');
+              Alert.alert(t('common.error'), t('messages.failedToDeleteTransaction'));
             }
           },
         },
@@ -275,7 +275,7 @@ export default function BankTransactionsScreen({ navigation }) {
           style={[styles.actionButton, { backgroundColor: theme.colors.warning || '#FF9800' }]}
           onPress={() => startEditingTransaction(item)}
         >
-          <Text style={styles.actionButtonText}>{t('buttons.edit') || 'Edit'}</Text>
+          <Text style={styles.actionButtonText}>{t('buttons.edit')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -338,11 +338,11 @@ export default function BankTransactionsScreen({ navigation }) {
         <View style={styles.editOverlay}>
           <View style={[styles.editContainer, { backgroundColor: theme.colors.card }]}>
             <Text style={[styles.editTitle, { color: theme.colors.text }]}>
-              {t('common.edit') || 'Edit Transaction'}
+              {t('common.edit')}
             </Text>
 
             <Text style={[styles.editLabel, { color: theme.colors.textSecondary }]}>
-              {t('common.description') || 'Description'}
+              {t('common.description')}
             </Text>
             <TextInput
               style={[styles.editInput, {
@@ -358,7 +358,7 @@ export default function BankTransactionsScreen({ navigation }) {
             />
 
             <Text style={[styles.editLabel, { color: theme.colors.textSecondary }]}>
-              {t('common.amount') || 'Amount'}
+              {t('common.amount')}
             </Text>
             <TextInput
               style={[styles.editInput, {
@@ -374,7 +374,7 @@ export default function BankTransactionsScreen({ navigation }) {
             />
 
             <Text style={[styles.editLabel, { color: theme.colors.textSecondary }]}>
-              {t('common.date') || 'Date'}
+              {t('common.date')}
             </Text>
             <TextInput
               style={[styles.editInput, {
@@ -389,7 +389,7 @@ export default function BankTransactionsScreen({ navigation }) {
             />
 
             <Text style={[styles.editLabel, { color: theme.colors.textSecondary }]}>
-              {t('common.type') || 'Type'} (Debit/Credit)
+              {t('common.type')} (Debit/Credit)
             </Text>
             <View style={styles.directionButtons}>
               <TouchableOpacity
@@ -440,7 +440,7 @@ export default function BankTransactionsScreen({ navigation }) {
                 style={[styles.editButton, { backgroundColor: theme.colors.primary }]}
                 onPress={saveTransactionEdit}
               >
-                <Text style={styles.editButtonText}>{t('common.save') || 'Save'}</Text>
+                <Text style={styles.editButtonText}>{t('common.save')}</Text>
               </TouchableOpacity>
             </View>
           </View>

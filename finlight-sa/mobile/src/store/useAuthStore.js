@@ -13,80 +13,63 @@ const useAuthStore = create((set, get) => ({
   isLoading: true,
 
   setAuth: async (data) => {
-    const token = data.accessToken || data.token;
-    const refreshToken = data.refreshToken;
-    const expiresIn = data.expiresIn || 3600; // Default 1 hour
-    const tokenExpiresAt = new Date(Date.now() + (expiresIn * 1000));
+    try {
+      // Handle both camelCase and PascalCase from backend
+      const token = data.accessToken || data.AccessToken || data.token;
+      const refreshToken = data.refreshToken || data.RefreshToken;
+      const expiresIn = data.expiresIn || data.ExpiresIn || 3600; // Default 1 hour
+      const tokenExpiresAt = new Date(Date.now() + (expiresIn * 1000));
+      
+      // Handle both camelCase and PascalCase for user and business
+      const user = data.user || data.User;
+      const business = data.business || data.DefaultBusiness || data.defaultBusiness;
 
-    await AsyncStorage.setItem('authToken', token);
-    await AsyncStorage.setItem('refreshToken', refreshToken || '');
-    await AsyncStorage.setItem('tokenExpiresAt', tokenExpiresAt.toISOString());
-    await AsyncStorage.setItem('userData', JSON.stringify(data.user));
-    await AsyncStorage.setItem('businessData', JSON.stringify(data.business));
+      if (!token) {
+        console.error('No token found in auth data:', data);
+        throw new Error('No access token provided');
+      }
 
-    set({
-      user: data.user,
-      business: data.business,
-      token: token,
-      refreshToken: refreshToken,
-      tokenExpiresAt: tokenExpiresAt,
-      isAuthenticated: true,
-      isLoading: false,
-    });
+      if (!user) {
+        console.error('No user found in auth data:', data);
+        throw new Error('No user data provided');
+      }
+
+      if (!business) {
+        console.error('No business found in auth data:', data);
+        throw new Error('No business data provided');
+      }
+
+      await AsyncStorage.setItem('authToken', token);
+      await AsyncStorage.setItem('refreshToken', refreshToken || '');
+      await AsyncStorage.setItem('tokenExpiresAt', tokenExpiresAt.toISOString());
+      await AsyncStorage.setItem('userData', JSON.stringify(user));
+      await AsyncStorage.setItem('businessData', JSON.stringify(business));
+
+      set({
+        user: user,
+        business: business,
+        token: token,
+        refreshToken: refreshToken,
+        tokenExpiresAt: tokenExpiresAt,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+    } catch (error) {
+      console.error('Error in setAuth:', error);
+      throw error;
+    }
   },
 
   loadAuth: async () => {
     try {
       console.log('Loading auth data...');
 
-      // Add timeout to AsyncStorage operations
-      const getItemWithTimeout = async (key) => {
-        return await Promise.race([
-          AsyncStorage.getItem(key),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error(`Timeout getting ${key}`)), 2000)
-          )
-        ]);
-      };
-
-      const [token, refreshToken, tokenExpiresAt, userData, businessData] = await Promise.all([
-        getItemWithTimeout('authToken').catch(() => null),
-        getItemWithTimeout('refreshToken').catch(() => null),
-        getItemWithTimeout('tokenExpiresAt').catch(() => null),
-        getItemWithTimeout('userData').catch(() => null),
-        getItemWithTimeout('businessData').catch(() => null),
-      ]);
-
-      console.log('Auth data loaded:', { hasToken: !!token, hasUserData: !!userData, hasBusinessData: !!businessData });
-
-      // Check if data exists and is not "undefined" string
-      if (token && token !== 'undefined' && userData && userData !== 'undefined' && businessData && businessData !== 'undefined') {
-        try {
-          const expiresAt = tokenExpiresAt ? new Date(tokenExpiresAt) : null;
-
-          set({
-            user: JSON.parse(userData),
-            business: JSON.parse(businessData),
-            token,
-            refreshToken,
-            tokenExpiresAt: expiresAt,
-            isAuthenticated: true,
-            isLoading: false,
-          });
-
-          console.log('Auth data restored successfully');
-        } catch (parseError) {
-          console.error('Error parsing stored data:', parseError);
-          // Clear invalid data
-          await get().clearAuthData();
-          set({ isLoading: false });
-        }
-      } else {
-        console.log('No valid auth data found, user not authenticated');
-        // Clear any invalid data
-        await get().clearAuthData();
-        set({ isLoading: false });
-      }
+      // Don't auto-login - clear all stored auth data on app start
+      // This forces user to login manually each time
+      await get().clearAuthData();
+      
+      set({ isLoading: false });
+      console.log('App started - user must login manually');
     } catch (error) {
       console.error('Error loading auth:', error);
       // Ensure loading always completes
@@ -95,14 +78,19 @@ const useAuthStore = create((set, get) => ({
   },
 
   login: async (email, password) => {
-    const result = await apiLogin(email, password);
+    try {
+      const result = await apiLogin(email, password);
 
-    if (result.success) {
-      await get().setAuth(result.data);
-      return { success: true };
+      if (result.success && result.data) {
+        await get().setAuth(result.data);
+        return { success: true };
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Login error:', error);
+      return { success: false, error: error.message || 'Login failed' };
     }
-
-    return result;
   },
 
   register: async (userData) => {
@@ -125,6 +113,7 @@ const useAuthStore = create((set, get) => ({
   },
 
   logout: async () => {
+    console.log('🔓 Logging out user...');
     await get().clearAuthData();
 
     set({
@@ -135,6 +124,8 @@ const useAuthStore = create((set, get) => ({
       tokenExpiresAt: null,
       isAuthenticated: false,
     });
+    
+    console.log('✅ Logout complete - isAuthenticated is now false');
   },
 
   isTokenExpired: () => {

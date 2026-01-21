@@ -14,5 +14,6 @@ public class Customer
 
     public Business Business { get; set; } = null!;
     public ICollection<Invoice> Invoices { get; set; } = new List<Invoice>();
+    public ICollection<Quotation> Quotations { get; set; } = new List<Quotation>();
     public ICollection<Payment> Payments { get; set; } = new List<Payment>();
 }

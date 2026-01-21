@@ -84,38 +84,88 @@ async def health_check():
 async def categorize_transaction(transaction: Transaction):
     """
     Categorize a single transaction based on its description and amount
+    Returns consistent category predictions with confidence scores
     """
     try:
+        if not transaction.description or not transaction.description.strip():
+            raise HTTPException(status_code=400, detail="Transaction description is required")
+        
         result = categorizer.predict(
-            description=transaction.description,
+            description=transaction.description.strip(),
             amount=transaction.amount,
             direction=transaction.direction
         )
+        
+        # Ensure confidence is always between 0 and 1
+        result["confidence"] = max(0.0, min(1.0, result.get("confidence", 0.5)))
+        
         return result
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Categorization error: {str(e)}")
+        # Return fallback category with low confidence on error
+        return {
+            "category": "Other",
+            "confidence": 0.3,
+            "alternatives": []
+        }
 
 @app.post("/categorize/batch", response_model=List[TransactionWithPrediction])
 async def categorize_transactions_batch(transactions: List[Transaction]):
     """
     Categorize multiple transactions at once
+    Returns consistent predictions for all transactions
     """
     try:
+        if not transactions or len(transactions) == 0:
+            raise HTTPException(status_code=400, detail="At least one transaction is required")
+        
+        if len(transactions) > 100:
+            raise HTTPException(status_code=400, detail="Maximum 100 transactions per batch")
+        
         results = []
         for txn in transactions:
-            prediction = categorizer.predict(
-                description=txn.description,
-                amount=txn.amount,
-                direction=txn.direction
-            )
-            results.append(TransactionWithPrediction(
-                description=txn.description,
-                amount=txn.amount,
-                direction=txn.direction,
-                predicted_category=prediction["category"],
-                confidence=prediction["confidence"]
-            ))
+            try:
+                if not txn.description or not txn.description.strip():
+                    # Skip invalid transactions but include them in results with fallback
+                    results.append(TransactionWithPrediction(
+                        description=txn.description or "",
+                        amount=txn.amount,
+                        direction=txn.direction,
+                        predicted_category="Other",
+                        confidence=0.3
+                    ))
+                    continue
+                
+                prediction = categorizer.predict(
+                    description=txn.description.strip(),
+                    amount=txn.amount,
+                    direction=txn.direction
+                )
+                
+                # Ensure confidence is valid
+                confidence = max(0.0, min(1.0, prediction.get("confidence", 0.5)))
+                
+                results.append(TransactionWithPrediction(
+                    description=txn.description,
+                    amount=txn.amount,
+                    direction=txn.direction,
+                    predicted_category=prediction["category"],
+                    confidence=confidence
+                ))
+            except Exception as e:
+                # Include transaction with fallback category on individual error
+                results.append(TransactionWithPrediction(
+                    description=txn.description or "",
+                    amount=txn.amount,
+                    direction=txn.direction,
+                    predicted_category="Other",
+                    confidence=0.3
+                ))
+        
         return results
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Batch categorization error: {str(e)}")
 

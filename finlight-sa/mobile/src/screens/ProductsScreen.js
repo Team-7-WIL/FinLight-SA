@@ -62,7 +62,11 @@ export default function ProductsScreen({ navigation }) {
 
   const getFilteredProducts = () => {
     if (!selectedCategory) return products;
-    return products.filter(product => product.productCategoryId === selectedCategory);
+    // Handle both camelCase and PascalCase from backend
+    return products.filter(product => {
+      const categoryId = product.productCategoryId || product.ProductCategoryId;
+      return categoryId === selectedCategory;
+    });
   };
 
   const getCategoryName = (categoryId) => {
@@ -148,7 +152,7 @@ export default function ProductsScreen({ navigation }) {
       )}
       <View style={styles.productFooter}>
         <Text style={[styles.productCategory, { color: theme.colors.textSecondary }]}>
-          {getCategoryName(item.productCategoryId)}
+          {getCategoryName(item.productCategoryId || item.ProductCategoryId)}
         </Text>
         <Text style={[styles.productType, { color: theme.colors.textSecondary }]}>
           {item.isService ? t('products.service') : t('products.product')}

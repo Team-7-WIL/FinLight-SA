@@ -32,6 +32,9 @@ import EditProductScreen from './src/screens/EditProductScreen';
 import OCRScanScreen from './src/screens/OCRScanScreen';
 import ProcessReceiptResultScreen from './src/screens/ProcessReceiptResultScreen';
 import AuditLogsScreen from './src/screens/AuditLogsScreen';
+import QuotationsScreen from './src/screens/QuotationsScreen';
+import CreateQuotationScreen from './src/screens/CreateQuotationScreen';
+import QuotationDetailScreen from './src/screens/QuotationDetailScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -72,6 +75,13 @@ function MainTabs() {
         component={InvoicesScreen}
         options={{
           tabBarLabel: t('tabs.invoices'),
+        }}
+      />
+      <Tab.Screen
+        name="Quotations"
+        component={QuotationsScreen}
+        options={{
+          tabBarLabel: t('quotations.title'),
         }}
       />
       <Tab.Screen
@@ -205,14 +215,31 @@ function AppStack() {
       <Stack.Screen
         name="AuditLogs"
         component={AuditLogsScreen}
-        options={{ title: 'Audit Logs' }}
+        options={{ title: t('titles.auditLogs') || 'Audit Logs' }}
+      />
+      <Stack.Screen
+        name="CreateQuotation"
+        component={CreateQuotationScreen}
+        options={{ title: t('quotations.createNew') }}
+      />
+      <Stack.Screen
+        name="QuotationDetail"
+        component={QuotationDetailScreen}
+        options={{ title: t('quotations.detailTitle') }}
       />
     </Stack.Navigator>
   );
 }
 
+function RootNavigator({ isAuthenticated }) {
+  return isAuthenticated ? <AppStack /> : <AuthStack />;
+}
+
 export default function App() {
-  const { isAuthenticated, isLoading, loadAuth } = useAuthStore();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isLoading = useAuthStore((state) => state.isLoading);
+  const loadAuth = useAuthStore((state) => state.loadAuth);
+  
   const { theme, isDark, initTheme } = useThemeStore();
 
   useEffect(() => {
@@ -236,7 +263,7 @@ export default function App() {
     initializeApp();
 
     return () => clearTimeout(timeout);
-  }, []);
+  }, [loadAuth]);
 
   if (isLoading) {
     return (
@@ -257,6 +284,7 @@ export default function App() {
         backgroundColor={theme.colors.background}
       />
       <NavigationContainer
+        key={isAuthenticated ? 'authenticated' : 'unauthenticated'}
         theme={{
           dark: isDark,
           colors: {
@@ -287,7 +315,7 @@ export default function App() {
             },
         }}
       >
-        {isAuthenticated ? <AppStack /> : <AuthStack />}
+        <RootNavigator isAuthenticated={isAuthenticated} />
       </NavigationContainer>
     </>
     </LanguageProvider>

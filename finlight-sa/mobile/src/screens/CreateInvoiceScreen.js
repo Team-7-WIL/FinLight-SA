@@ -176,7 +176,7 @@ export default function CreateInvoiceScreen({ navigation }) {
         categoryName = foundCategory?.name;
       }
       
-      categoryName = categoryName || t('products.uncategorized') || 'Uncategorized';
+      categoryName = categoryName || t('products.uncategorized');
       
       console.log(`Product ${product.name} -> category ${categoryName}`);
       

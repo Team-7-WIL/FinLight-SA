@@ -49,10 +49,10 @@ export default function LoginScreen({ navigation }) {
     >
       <View style={styles.content}>
         <Text style={[styles.title, { color: theme.colors.text }]}>
-          Welcome Back
+          {t('auth.welcomeBack')}
         </Text>
         <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-          Sign in to continue to FinLight SA
+          {t('auth.signInToContinue')}
         </Text>
 
         <View style={styles.form}>
@@ -106,7 +106,7 @@ export default function LoginScreen({ navigation }) {
             onPress={() => navigation.navigate('Register')}
           >
             <Text style={{ color: theme.colors.primary }}>
-              Don't have an account? Register
+              {t('auth.dontHaveAccount')} <Text style={{ fontWeight: '600' }}>{t('auth.registerNow')}</Text>
             </Text>
           </TouchableOpacity>
         </View>

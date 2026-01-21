@@ -22,7 +22,12 @@ Log.Logger = new LoggerConfiguration()
 builder.Host.UseSerilog();
 
 // Add services to the container
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+        options.JsonSerializerOptions.WriteIndented = false;
+    });
 builder.Services.AddEndpointsApiExplorer();
 
 // Swagger configuration with JWT support
@@ -109,6 +114,7 @@ builder.Services.AddSingleton<SupabaseService>();
 builder.Services.AddHttpClient<AIService>();
 builder.Services.AddScoped<OcrProcessingService>();
 builder.Services.AddScoped<PdfService>();
+builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddHttpContextAccessor();
 
@@ -128,4 +134,5 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-app.Run();
+// Bind to 0.0.0.0:5175 to allow Android emulator access
+app.Run("http://0.0.0.0:5175");
